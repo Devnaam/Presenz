@@ -14,17 +14,30 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "bullmq": "^5.71.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "franc": "^6.2.0",
+    "groq-sdk": "^1.1.2",
+    "ioredis": "^5.10.1",
     "mongoose": "^9.3.3",
-    "pino": "^10.3.1"
+    "multer": "^2.1.1",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-chat-parser": "^4.0.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/ioredis": "^4.28.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^25.5.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/qrcode-terminal": "^0.12.2",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
