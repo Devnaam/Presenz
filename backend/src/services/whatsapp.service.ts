@@ -5,14 +5,15 @@ import makeWASocket, {
   WASocket,
   proto,
   isJidBroadcast,
-  delay
+  delay,
+  downloadMediaMessage
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { WhatsAppSession, FamilyContact, StudentStatus, Message, PersonalityProfile } from '../models';
 import { SessionStatus, MessageDirection, MessageType, MessageStatus } from '../types';
 import { logger, formatPhoneNumber, extractPhoneNumber, isMessageFromMe, getMessageText, getMessageType } from '../utils/baileys';
 import { useMongoDBAuthState } from '../utils/mongoAuthState';
-import { replyQueue } from '../config/queue';
+import { replyQueue, voiceQueue } from '../config/queue';
 import QRCode from 'qrcode';
 import qrcodeTerminal from 'qrcode-terminal';
 
@@ -95,92 +96,100 @@ class WhatsAppService {
       // Local flag to prevent duplicate close handling from same socket instance
       let closedOnce = false;
 
-      // Handle connection updates
+      // Wrap entire connection.update handler in try/catch
       sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        try {
+          const { connection, lastDisconnect, qr } = update;
 
-        // QR code generated — print in terminal and save base64 for API
-        if (qr) {
-          qrcodeTerminal.generate(qr, { small: true });
-          console.log(`📱 Scan the QR above with WhatsApp! (expires in ~60 seconds)`);
+          // QR code generated — print in terminal and save base64 for API
+          if (qr) {
+            qrcodeTerminal.generate(qr, { small: true });
+            console.log(`📱 Scan the QR above with WhatsApp! (expires in ~60 seconds)`);
 
-          const qrBase64 = await QRCode.toDataURL(qr);
-          await WhatsAppSession.findOneAndUpdate(
-            { sessionId },
-            { qrCode: qrBase64, status: SessionStatus.PENDING_QR }
-          );
-        }
-
-        // Connection established
-        if (connection === 'open') {
-          await saveCreds();
-          reconnectingSet.delete(sessionId);
-
-          await WhatsAppSession.findOneAndUpdate(
-            { sessionId },
-            {
-              status: SessionStatus.CONNECTED,
-              connectedAt: new Date(),
-              lastSeenAt: new Date(),
-              qrCode: null
-            }
-          );
-          console.log(`✅ WhatsApp connected for session: ${sessionId}`);
-        }
-
-        // Connection closed
-        if (connection === 'close') {
-          if (closedOnce) return;
-          closedOnce = true;
-
-          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-          const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-          const isRestartRequired = statusCode === DisconnectReason.restartRequired;
-
-          console.log(`❌ Connection closed for session: ${sessionId}, statusCode: ${statusCode}`);
-
-          activeSockets.delete(sessionId);
-
-          if (isLoggedOut) {
-            reconnectingSet.delete(sessionId);
+            const qrBase64 = await QRCode.toDataURL(qr);
             await WhatsAppSession.findOneAndUpdate(
               { sessionId },
-              { status: SessionStatus.DISCONNECTED }
+              { qrCode: qrBase64, status: SessionStatus.PENDING_QR }
             );
-            console.log(`🚪 Session logged out: ${sessionId}`);
-            return;
           }
 
-          if (reconnectingSet.has(sessionId)) return;
-          reconnectingSet.add(sessionId);
-
-          if (isRestartRequired) {
-            console.log(`💾 Saving credentials before restart...`);
+          // Connection established
+          if (connection === 'open') {
             await saveCreds();
-            console.log(`✅ Credentials saved — reconnecting in 3s`);
+            reconnectingSet.delete(sessionId);
 
-            setTimeout(async () => {
-              reconnectingSet.delete(sessionId);
-              if (!activeSockets.has(sessionId)) {
-                console.log(`🔄 Retrying connection for session: ${sessionId}`);
-                await this.initializeSocket(sessionId, userId);
+            await WhatsAppSession.findOneAndUpdate(
+              { sessionId },
+              {
+                status: SessionStatus.CONNECTED,
+                connectedAt: new Date(),
+                lastSeenAt: new Date(),
+                qrCode: null
               }
-            }, 3000);
-          } else {
-            setTimeout(async () => {
-              reconnectingSet.delete(sessionId);
-              if (!activeSockets.has(sessionId)) {
-                console.log(`🔄 Retrying connection for session: ${sessionId}`);
-                await this.initializeSocket(sessionId, userId);
-              }
-            }, 8000);
+            );
+            console.log(`✅ WhatsApp connected for session: ${sessionId}`);
           }
+
+          // Connection closed
+          if (connection === 'close') {
+            if (closedOnce) return;
+            closedOnce = true;
+
+            const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+            const isRestartRequired = statusCode === DisconnectReason.restartRequired;
+
+            console.log(`❌ Connection closed for session: ${sessionId}, statusCode: ${statusCode}`);
+
+            activeSockets.delete(sessionId);
+
+            if (isLoggedOut) {
+              reconnectingSet.delete(sessionId);
+              await WhatsAppSession.findOneAndUpdate(
+                { sessionId },
+                { status: SessionStatus.DISCONNECTED }
+              );
+              console.log(`🚪 Session logged out: ${sessionId}`);
+              return;
+            }
+
+            if (reconnectingSet.has(sessionId)) return;
+            reconnectingSet.add(sessionId);
+
+            if (isRestartRequired) {
+              console.log(`💾 Saving credentials before restart...`);
+              await saveCreds();
+              console.log(`✅ Credentials saved — reconnecting in 3s`);
+
+              setTimeout(async () => {
+                reconnectingSet.delete(sessionId);
+                if (!activeSockets.has(sessionId)) {
+                  console.log(`🔄 Retrying connection for session: ${sessionId}`);
+                  await this.initializeSocket(sessionId, userId);
+                }
+              }, 3000);
+            } else {
+              setTimeout(async () => {
+                reconnectingSet.delete(sessionId);
+                if (!activeSockets.has(sessionId)) {
+                  console.log(`🔄 Retrying connection for session: ${sessionId}`);
+                  await this.initializeSocket(sessionId, userId);
+                }
+              }, 8000);
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error in connection.update handler for session ${sessionId}:`, error);
         }
       });
 
-      // Save credentials on every update
+      // Wrap creds.update handler in try/catch
       sock.ev.on('creds.update', async () => {
-        await saveCreds();
+        try {
+          await saveCreds();
+        } catch (error) {
+          console.error('❌ Error saving creds on update:', error);
+        }
       });
 
       // Handle incoming messages — sessionId passed through
@@ -194,10 +203,14 @@ class WhatsAppService {
 
       // Update last seen timestamp
       sock.ev.on('presence.update', async () => {
-        await WhatsAppSession.findOneAndUpdate(
-          { sessionId },
-          { lastSeenAt: new Date() }
-        );
+        try {
+          await WhatsAppSession.findOneAndUpdate(
+            { sessionId },
+            { lastSeenAt: new Date() }
+          );
+        } catch (error) {
+          console.error('❌ Error updating presence:', error);
+        }
       });
 
     } catch (error) {
@@ -217,12 +230,17 @@ class WhatsAppService {
   ): Promise<void> {
     try {
       // Ignore messages from self
-      if (isMessageFromMe(message)) return;
+      if (isMessageFromMe(message)) {
+        return;
+      }
 
+      // ✅ FIX TS18049: Guard message.key before any access
       if (!message.key) return;
 
       // Ignore broadcast messages
-      if (message.key.remoteJid && isJidBroadcast(message.key.remoteJid)) return;
+      if (message.key.remoteJid && isJidBroadcast(message.key.remoteJid)) {
+        return;
+      }
 
       // Extract sender phone number
       const senderJid = message.key.remoteJid;
@@ -250,61 +268,173 @@ class WhatsAppService {
 
       // Get message type and content
       const messageType = getMessageType(message);
-      const messageText = getMessageText(message);
 
       if (messageType === 'other') {
         console.log(`⚠️ Unsupported message type from: ${familyContact.name}`);
         return;
       }
 
-      // Save incoming message to database
-      const savedMessage = await Message.create({
-        userId,
-        contactId: familyContact._id,
-        direction: MessageDirection.INCOMING,
-        type: messageType === 'voice' ? MessageType.VOICE_NOTE : MessageType.TEXT,
-        originalContent: messageText || 'Voice message',
-        status: MessageStatus.RECEIVED,
-        whatsappMessageId: message.key.id ?? undefined,
-        timestamp: new Date((message.messageTimestamp as number) * 1000)
-      });
+      // Handle TEXT messages
+      if (messageType === 'text') {
+        const messageText = getMessageText(message);
 
-      console.log(`✅ Message saved: ${savedMessage._id}`);
+        if (!messageText) return;
 
-      // VALIDATION CHECK 3: Is student away?
-      const studentStatus = await StudentStatus.findOne({ userId });
+        // ✅ FIX TS2769 + TS2339: ?? undefined strips null, cast result as any
+        const savedMessage = await Message.create({
+          userId,
+          contactId: familyContact._id,
+          direction: MessageDirection.INCOMING,
+          type: MessageType.TEXT,
+          originalContent: messageText,
+          status: MessageStatus.RECEIVED,
+          whatsappMessageId: message.key.id ?? undefined,
+          timestamp: new Date((message.messageTimestamp as number) * 1000)
+        }) as any;
 
-      if (!studentStatus || studentStatus.mode === 'available') {
-        console.log(`ℹ️ Student is available - No auto-reply needed`);
-        return;
+        console.log(`✅ Text message saved: ${savedMessage._id}`);
+
+        // Check if should reply
+        await this.checkAndQueueReply(userId, familyContact._id, savedMessage._id.toString(), messageText, 'text');
       }
 
-      // VALIDATION CHECK 4: Does personality profile exist?
-      const profile = await PersonalityProfile.findOne({
-        userId,
-        contactId: familyContact._id
-      });
+      // Handle VOICE messages
+      if (messageType === 'voice') {
+        console.log(`🎤 Voice note received from: ${familyContact.name}`);
 
-      if (!profile || !profile.systemPrompt) {
-        console.log(`⚠️ No personality profile found for ${familyContact.name}`);
-        return;
+        // ✅ FIX TS2769 + TS2339: ?? undefined strips null, cast result as any
+        const savedMessage = await Message.create({
+          userId,
+          contactId: familyContact._id,
+          direction: MessageDirection.INCOMING,
+          type: MessageType.VOICE_NOTE,
+          originalContent: 'Voice note (processing...)',
+          status: MessageStatus.RECEIVED,
+          whatsappMessageId: message.key.id ?? undefined,
+          timestamp: new Date((message.messageTimestamp as number) * 1000)
+        }) as any;
+
+        console.log(`✅ Voice note message saved: ${savedMessage._id}`);
+
+        // Check if should process
+        const shouldProcess = await this.shouldProcessMessage(userId, familyContact._id);
+
+        if (!shouldProcess) {
+          return;
+        }
+
+        // Download and decrypt voice note
+        try {
+          // ✅ FIX TS2345: cast downloadOptions as any — reuploadRequest is optional at runtime
+          const sock = this.getSocket(sessionId);
+          const downloadOptions: any = {
+            logger,
+            ...(sock && { reuploadRequest: sock.updateMediaMessage })
+          };
+
+          const buffer = await downloadMediaMessage(
+            message as any,
+            'buffer',
+            {},
+            downloadOptions
+          ) as Buffer;
+
+          console.log(`📥 Voice note downloaded (${buffer.length} bytes)`);
+
+          // Push to voice transcription queue
+          await voiceQueue.add('transcribe-voice', {
+            userId,
+            contactId: familyContact._id.toString(),
+            messageId: savedMessage._id.toString(),
+            audioBuffer: buffer.toString('base64')
+          });
+
+          console.log('📬 Voice note queued for transcription');
+
+        } catch (error) {
+          console.error('Error downloading voice note:', error);
+          await Message.findByIdAndUpdate(savedMessage._id, {
+            status: MessageStatus.FAILED,
+            originalContent: 'Voice note (download failed)'
+          });
+        }
       }
-
-      // All checks passed - Push to reply queue
-      console.log(`📬 Queuing message for AI reply`);
-
-      await replyQueue.add('generate-reply', {
-        userId,
-        contactId: familyContact._id.toString(),
-        messageId: savedMessage._id.toString(),
-        messageText: messageText || 'Voice message',
-        messageType: messageType === 'voice' ? 'voice' : 'text',
-        sessionId
-      });
 
     } catch (error) {
       console.error('Error handling incoming message:', error);
     }
+  }
+
+
+  /**
+   * Check if message should be processed and queue for reply
+   */
+  private async checkAndQueueReply(
+    userId: string,
+    contactId: any,
+    messageId: string,
+    messageText: string,
+    messageType: 'text' | 'voice'
+  ): Promise<void> {
+    // VALIDATION CHECK 3: Is student away?
+    const studentStatus = await StudentStatus.findOne({ userId });
+
+    if (!studentStatus || studentStatus.mode === 'available') {
+      console.log(`ℹ️ Student is available - No auto-reply needed`);
+      return;
+    }
+
+    // VALIDATION CHECK 4: Does personality profile exist?
+    const profile = await PersonalityProfile.findOne({
+      userId,
+      contactId
+    });
+
+    if (!profile || !profile.systemPrompt) {
+      console.log(`⚠️ No personality profile found`);
+      return;
+    }
+
+    // All checks passed - Push to reply queue
+    console.log(`📬 Queuing message for AI reply`);
+
+    await replyQueue.add('generate-reply', {
+      userId,
+      contactId: contactId.toString(),
+      messageId,
+      messageText,
+      messageType
+    });
+  }
+
+
+  /**
+   * Check if message should be processed (for voice notes)
+   */
+  private async shouldProcessMessage(userId: string, contactId: any): Promise<boolean> {
+    const studentStatus = await StudentStatus.findOne({ userId });
+
+    if (!studentStatus || studentStatus.mode === 'available') {
+      console.log(`ℹ️ Student is available - Saving but not processing voice note`);
+      return false;
+    }
+
+    const profile = await PersonalityProfile.findOne({ userId, contactId });
+
+    if (!profile || !profile.systemPrompt) {
+      console.log(`⚠️ No personality profile - Saving but not processing voice note`);
+      return false;
+    }
+
+    return true;
+  }
+
+
+  /**
+   * Get socket for session ID (helper method)
+   */
+  private getSocket(sessionId: string): WASocket | undefined {
+    return activeSockets.get(sessionId);
   }
 
 

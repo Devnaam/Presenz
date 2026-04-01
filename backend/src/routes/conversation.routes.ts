@@ -3,7 +3,9 @@ import { Message, FamilyContact } from '../models';
 import { MessageDirection } from '../types';
 import whatsappService from '../services/whatsapp.service';
 
+
 const router = Router();
+
 
 /**
  * GET /api/v1/conversations
@@ -55,18 +57,19 @@ router.get('/', async (req: Request, res: Response) => {
       return timeB - timeA;
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: conversations
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch conversations'
     });
   }
 });
+
 
 /**
  * GET /api/v1/conversations/:contactId
@@ -97,7 +100,7 @@ router.get('/:contactId', async (req: Request, res: Response) => {
     // Reverse to show oldest first
     messages.reverse();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         contact,
@@ -107,12 +110,13 @@ router.get('/:contactId', async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch conversation'
     });
   }
 });
+
 
 /**
  * POST /api/v1/conversations/send
@@ -160,13 +164,13 @@ router.post('/send', async (req: Request, res: Response) => {
     const { StudentStatus } = await import('../models');
     await StudentStatus.findOneAndUpdate(
       { userId },
-      { 
+      {
         lastActiveAt: new Date(),
         mode: 'available'
       }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Message sent successfully',
       data: savedMessage
@@ -174,15 +178,16 @@ router.post('/send', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('Send message error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to send message'
     });
   }
 });
 
+
 /**
- * GET /api/v1/conversations/ai-log
+ * GET /api/v1/conversations/ai-log/all
  * Get all AI-generated messages
  */
 router.get('/ai-log/all', async (req: Request, res: Response) => {
@@ -208,7 +213,7 @@ router.get('/ai-log/all', async (req: Request, res: Response) => {
       .sort({ timestamp: -1 })
       .lean();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         messages: aiMessages,
@@ -217,11 +222,12 @@ router.get('/ai-log/all', async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch AI log'
     });
   }
 });
+
 
 export default router;

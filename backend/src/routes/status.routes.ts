@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import { StudentStatus } from '../models';
 import { StudentMode } from '../types';
 
+
 const router = Router();
+
 
 /**
  * GET /api/v1/status
@@ -19,12 +21,12 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    let status = await StudentStatus.findOne({ userId });
+    let status = await StudentStatus.findOne({ userId: userId as string });
 
     // Create default status if not exists
     if (!status) {
       status = await StudentStatus.create({
-        userId,
+        userId: userId as string,
         mode: StudentMode.AVAILABLE,
         autoAwayEnabled: true,
         autoAwayMinutes: 30,
@@ -32,18 +34,19 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: status
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to get status'
     });
   }
 });
+
 
 /**
  * PATCH /api/v1/status/mode
@@ -69,26 +72,27 @@ router.patch('/mode', async (req: Request, res: Response) => {
 
     const status = await StudentStatus.findOneAndUpdate(
       { userId },
-      { 
+      {
         mode,
         lastActiveAt: new Date()
       },
       { upsert: true, new: true }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: `Status updated to ${mode}`,
       data: status
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to update status'
     });
   }
 });
+
 
 /**
  * PATCH /api/v1/status/settings
@@ -123,19 +127,20 @@ router.patch('/settings', async (req: Request, res: Response) => {
       { upsert: true, new: true }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Settings updated successfully',
       data: status
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to update settings'
     });
   }
 });
+
 
 /**
  * POST /api/v1/status/activity
@@ -154,24 +159,25 @@ router.post('/activity', async (req: Request, res: Response) => {
 
     const status = await StudentStatus.findOneAndUpdate(
       { userId },
-      { 
+      {
         lastActiveAt: new Date(),
         mode: StudentMode.AVAILABLE // Auto-switch to available when active
       },
       { upsert: true, new: true }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: status
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to update activity'
     });
   }
 });
+
 
 export default router;

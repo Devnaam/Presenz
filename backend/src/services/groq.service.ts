@@ -1,9 +1,11 @@
 import { groq, GROQ_MODELS, GROQ_CONFIG } from '../config/groq';
 import { PersonalityProfile, Message, FamilyContact } from '../models';
+import fs from 'fs';
 
 
 class GroqService {
-  
+
+
   /**
    * Generate AI reply based on personality profile and conversation context
    */
@@ -15,13 +17,13 @@ class GroqService {
   ): Promise<string> {
     try {
       const profile = await PersonalityProfile.findOne({ userId, contactId });
-      
+
       if (!profile || !profile.systemPrompt) {
         throw new Error('Personality profile not found or incomplete');
       }
 
       const contact = await FamilyContact.findById(contactId);
-      
+
       if (!contact) {
         throw new Error('Family contact not found');
       }
@@ -81,6 +83,70 @@ class GroqService {
 
 
   /**
+   * Transcribe audio file using Groq Whisper
+   */
+  async transcribeAudio(audioFilePath: string): Promise<{
+    text: string;
+    language: string;
+  }> {
+    try {
+      console.log('🎤 Transcribing audio with Groq Whisper...');
+
+      const audioFile = fs.createReadStream(audioFilePath);
+
+      const transcription = await groq.audio.transcriptions.create({
+        file: audioFile,
+        model: GROQ_MODELS.WHISPER,
+        response_format: 'verbose_json'
+      });
+
+      const text = transcription.text?.trim();
+
+      if (!text) {
+        throw new Error('No transcription returned');
+      }
+
+      const language = (transcription as any).language || 'unknown';
+
+      console.log(`✅ Transcription complete: "${text.substring(0, 50)}..."`);
+      console.log(`🌐 Detected language: ${language}`);
+
+      return {
+        text,
+        language: this.mapWhisperLanguage(language)
+      };
+
+    } catch (error: any) {
+      console.error('Error transcribing audio:', error);
+      throw new Error(`Failed to transcribe audio: ${error.message}`);
+    }
+  }
+
+
+  /**
+   * Map Whisper language codes to readable names
+   */
+  private mapWhisperLanguage(code: string): string {
+    const languageMap: { [key: string]: string } = {
+      'en': 'English',
+      'hi': 'Hindi',
+      'te': 'Telugu',
+      'ta': 'Tamil',
+      'mr': 'Marathi',
+      'bn': 'Bengali',
+      'gu': 'Gujarati',
+      'kn': 'Kannada',
+      'ml': 'Malayalam',
+      'pa': 'Punjabi',
+      'ur': 'Urdu',
+      'or': 'Oriya'
+    };
+
+    return languageMap[code.toLowerCase()] || 'English';
+  }
+
+
+  /**
    * Build the complete system prompt
    */
   private buildSystemPrompt(
@@ -125,7 +191,7 @@ YOUR REPLY (in ${incomingLanguage}, short and natural):`;
     let cleaned = reply.replace(/[*"]/g, '').trim();
 
     const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    
+
     if (sentences.length > 3) {
       cleaned = sentences.slice(0, 3).join('. ') + '.';
     }

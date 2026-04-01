@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import { Message, FamilyContact, StudentStatus } from '../models';
 import { MessageDirection } from '../types';
 
+
 const router = Router();
+
 
 /**
  * GET /api/v1/dashboard/summary
@@ -57,7 +59,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       .populate('contactId', 'name relation')
       .lean();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         today: {
@@ -75,11 +77,12 @@ router.get('/summary', async (req: Request, res: Response) => {
     });
 
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch dashboard summary'
     });
   }
 });
+
 
 export default router;

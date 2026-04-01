@@ -3,13 +3,16 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDatabase } from './config/database';
 import whatsappService from './services/whatsapp.service';
+import { startCleanupCron } from './utils/cron';
 
-// Import Redis and Queue config
+// Import configurations
 import './config/redis';
 import './config/queue';
+import './config/cloudinary';
 
-// Import worker
+// Import workers
 import './workers/reply.worker';
+import './workers/voice.worker';
 
 // Import routes
 import sessionRoutes from './routes/session.routes';
@@ -22,7 +25,6 @@ import dashboardRoutes from './routes/dashboard.routes';
 
 // Load environment variables
 dotenv.config();
-
 
 // Initialize Express app
 const app: Application = express();
@@ -96,6 +98,9 @@ const startServer = async () => {
     console.log('🔄 Restoring WhatsApp sessions...');
     await whatsappService.restoreAllSessions();
 
+    // Start cleanup cron
+    startCleanupCron();
+
     // Start listening
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
@@ -105,6 +110,7 @@ const startServer = async () => {
       console.log(`🧠 AI Personality Engine ready`);
       console.log(`📬 BullMQ Queue System active`);
       console.log(`🛡️ Contact Protection enabled`);
+      console.log(`🎙️ Voice Note Support enabled`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

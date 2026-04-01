@@ -63,6 +63,7 @@ export const useMongoDBAuthState = async (
           }
           return data;
         },
+        // ✅ FIX: Use .catch() to handle floating promise from saveCreds()
         set: (data: any) => {
           for (const category in data) {
             for (const id in data[category]) {
@@ -75,7 +76,7 @@ export const useMongoDBAuthState = async (
               }
             }
           }
-          saveCreds();
+          saveCreds().catch(err => console.error('❌ Error in keys.set saveCreds:', err));
         }
       }
     },

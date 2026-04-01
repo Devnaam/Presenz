@@ -7,6 +7,7 @@ import groqService from '../services/groq.service';
 import whatsappService from '../services/whatsapp.service';
 import { detectLanguage } from '../utils/language';
 
+
 interface ReplyJobData {
   userId: string;
   contactId: string;
@@ -15,11 +16,13 @@ interface ReplyJobData {
   messageType: 'text' | 'voice';
 }
 
+
 /**
  * Reply Worker - Processes messages and generates AI replies
  */
 class ReplyWorker {
   private worker: Worker;
+
 
   constructor() {
     this.worker = new Worker(
@@ -29,10 +32,10 @@ class ReplyWorker {
       },
       {
         connection: redis,
-        concurrency: 5, // Process 5 jobs concurrently
+        concurrency: 5,
         limiter: {
           max: 10,
-          duration: 1000 // Max 10 jobs per second
+          duration: 1000
         }
       }
     );
@@ -40,18 +43,19 @@ class ReplyWorker {
     this.setupEventHandlers();
   }
 
+
   /**
    * Process a reply job
    */
   private async processReplyJob(job: Job<ReplyJobData>): Promise<void> {
-    const { userId, contactId, messageId, messageText, messageType } = job.data;
+    const { userId, contactId, messageId, messageText } = job.data;
 
     console.log(`🔄 Processing reply job for message: ${messageId}`);
 
     try {
       // Step 1: Validate all conditions again (in case state changed)
       const isValid = await this.validateReplyConditions(userId, contactId);
-      
+
       if (!isValid) {
         console.log('⚠️ Reply conditions not met - skipping');
         return;
@@ -59,7 +63,7 @@ class ReplyWorker {
 
       // Step 2: Check rate limiting (no reply within last 60 seconds)
       const shouldRateLimit = await this.checkRateLimit(userId, contactId);
-      
+
       if (shouldRateLimit) {
         console.log('⏱️ Rate limit active - skipping reply');
         return;
@@ -85,7 +89,7 @@ class ReplyWorker {
 
       // Step 5: Send via WhatsApp
       const contact = await FamilyContact.findById(contactId);
-      
+
       if (!contact) {
         throw new Error('Contact not found');
       }
@@ -116,7 +120,7 @@ class ReplyWorker {
 
     } catch (error: any) {
       console.error('❌ Error processing reply job:', error);
-      
+
       // Update message status to failed
       await Message.findByIdAndUpdate(messageId, {
         status: MessageStatus.FAILED
@@ -126,13 +130,14 @@ class ReplyWorker {
     }
   }
 
+
   /**
    * Validate all reply conditions
    */
   private async validateReplyConditions(userId: string, contactId: string): Promise<boolean> {
     // Check 1: Student status must be "away"
     const studentStatus = await StudentStatus.findOne({ userId });
-    
+
     if (!studentStatus || studentStatus.mode === 'available') {
       console.log('❌ Student is available');
       return false;
@@ -140,7 +145,7 @@ class ReplyWorker {
 
     // Check 2: Contact must be active
     const contact = await FamilyContact.findById(contactId);
-    
+
     if (!contact || !contact.isActive) {
       console.log('❌ Contact is not active');
       return false;
@@ -148,7 +153,7 @@ class ReplyWorker {
 
     // Check 3: Personality profile must exist
     const profile = await PersonalityProfile.findOne({ userId, contactId });
-    
+
     if (!profile || !profile.systemPrompt) {
       console.log('❌ No personality profile found');
       return false;
@@ -156,6 +161,7 @@ class ReplyWorker {
 
     return true;
   }
+
 
   /**
    * Check if we should rate limit (replied within last 60 seconds)
@@ -172,6 +178,7 @@ class ReplyWorker {
 
     return !!recentReply;
   }
+
 
   /**
    * Setup event handlers for worker
@@ -192,6 +199,7 @@ class ReplyWorker {
     console.log('👷 Reply Worker started');
   }
 
+
   /**
    * Graceful shutdown
    */
@@ -200,5 +208,6 @@ class ReplyWorker {
     console.log('🔌 Reply Worker closed');
   }
 }
+
 
 export default new ReplyWorker();

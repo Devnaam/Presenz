@@ -50,3 +50,9 @@ temp/
 
 # Railway/Render deployment
 .railway/
+
+
+# ... existing content ...
+
+# Temporary audio files
+temp/
