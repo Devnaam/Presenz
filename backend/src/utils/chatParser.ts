@@ -1,4 +1,4 @@
-import WhatsAppChatParser from 'whatsapp-chat-parser';
+import { parseString } from 'whatsapp-chat-parser';
 import { detectLanguage, isHinglish } from './language';
 import { MessageSender, IRawMessage } from '../types';
 
@@ -15,13 +15,19 @@ export interface ParsedMessage {
  */
 export const parseWhatsAppChat = async (fileContent: string): Promise<ParsedMessage[]> => {
   try {
-    const messages = await WhatsAppChatParser.parseString(fileContent);
+    const messages = await parseString(fileContent);
     
     return messages
-      .filter((msg: any) => msg.message && msg.message.trim().length > 0)
+      .filter((msg: any) =>
+        msg.message &&
+        msg.message.trim().length > 0 &&
+        msg.author !== null &&          // ✅ filter out system messages with null author
+        msg.author !== undefined &&
+        msg.author.trim().length > 0
+      )
       .map((msg: any) => ({
         date: new Date(msg.date),
-        author: msg.author,
+        author: msg.author.trim(),
         message: msg.message.trim()
       }));
   } catch (error) {
@@ -45,6 +51,11 @@ export const separateMessagesBySender = (
   const familyMessages: ParsedMessage[] = [];
 
   for (const msg of messages) {
+    // ✅ skip any message that still has a null/empty author
+    if (!msg.author || msg.author.trim().length === 0) {
+      continue;
+    }
+
     const normalizedAuthor = msg.author.toLowerCase().trim();
     const normalizedStudent = studentName.toLowerCase().trim();
 
@@ -146,11 +157,9 @@ export const selectRepresentativeMessages = (
   const selected: IRawMessage[] = [];
   const totalMessages = messages.length;
 
-  // ✅ Only change — _language prefix to suppress unused variable error
   for (const [_language, langMessages] of Object.entries(byLanguage)) {
     const proportion = langMessages.length / totalMessages;
     const targetCount = Math.ceil(proportion * maxCount);
-    
     const step = Math.max(1, Math.floor(langMessages.length / targetCount));
     
     for (let i = 0; i < langMessages.length && selected.length < maxCount; i += step) {

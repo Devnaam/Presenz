@@ -3,12 +3,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDatabase } from './config/database';
 import whatsappService from './services/whatsapp.service';
-import { startCleanupCron } from './utils/cron';
+import { startCleanupCron, startSubscriptionCron } from './utils/cron';
 
 // Import configurations
 import './config/redis';
 import './config/queue';
 import './config/cloudinary';
+import './config/razorpay';
 
 // Import workers
 import './workers/reply.worker';
@@ -21,6 +22,7 @@ import contactRoutes from './routes/contact.routes';
 import statusRoutes from './routes/status.routes';
 import conversationRoutes from './routes/conversation.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import subscriptionRoutes from './routes/subscription.routes';
 
 
 // Load environment variables
@@ -36,6 +38,10 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
+
+// Special handling for webhook (raw body needed for signature verification)
+app.use('/api/v1/subscription/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -57,6 +63,7 @@ app.use('/api/v1/contacts', contactRoutes);
 app.use('/api/v1/status', statusRoutes);
 app.use('/api/v1/conversations', conversationRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/subscription', subscriptionRoutes);
 
 
 // Test route
@@ -98,8 +105,9 @@ const startServer = async () => {
     console.log('🔄 Restoring WhatsApp sessions...');
     await whatsappService.restoreAllSessions();
 
-    // Start cleanup cron
+    // Start cron jobs
     startCleanupCron();
+    startSubscriptionCron();
 
     // Start listening
     app.listen(PORT, () => {
@@ -111,6 +119,7 @@ const startServer = async () => {
       console.log(`📬 BullMQ Queue System active`);
       console.log(`🛡️ Contact Protection enabled`);
       console.log(`🎙️ Voice Note Support enabled`);
+      console.log(`💳 Razorpay Payments ready`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

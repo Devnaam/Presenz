@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { StudentStatus } from '../models';
 import { StudentMode } from '../types';
 
@@ -23,7 +24,6 @@ router.get('/', async (req: Request, res: Response) => {
 
     let status = await StudentStatus.findOne({ userId: userId as string });
 
-    // Create default status if not exists
     if (!status) {
       status = await StudentStatus.create({
         userId: userId as string,
@@ -72,11 +72,8 @@ router.patch('/mode', async (req: Request, res: Response) => {
 
     const status = await StudentStatus.findOneAndUpdate(
       { userId },
-      {
-        mode,
-        lastActiveAt: new Date()
-      },
-      { upsert: true, new: true }
+      { mode, lastActiveAt: new Date() },
+      { upsert: true, returnDocument: 'after' }
     );
 
     return res.status(200).json({
@@ -109,22 +106,20 @@ router.patch('/settings', async (req: Request, res: Response) => {
       });
     }
 
-    const updateData: any = {
-      lastActiveAt: new Date()
-    };
+    const updateData: any = { lastActiveAt: new Date() };
 
     if (typeof autoAwayEnabled === 'boolean') {
       updateData.autoAwayEnabled = autoAwayEnabled;
     }
 
     if (autoAwayMinutes) {
-      updateData.autoAwayMinutes = Math.max(5, Math.min(autoAwayMinutes, 120)); // 5-120 min range
+      updateData.autoAwayMinutes = Math.max(5, Math.min(autoAwayMinutes, 120));
     }
 
     const status = await StudentStatus.findOneAndUpdate(
       { userId },
       updateData,
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     return res.status(200).json({
@@ -157,13 +152,13 @@ router.post('/activity', async (req: Request, res: Response) => {
       });
     }
 
+    // Cast string to ObjectId so upsert passes schema validation on new doc creation
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
     const status = await StudentStatus.findOneAndUpdate(
-      { userId },
-      {
-        lastActiveAt: new Date(),
-        mode: StudentMode.AVAILABLE // Auto-switch to available when active
-      },
-      { upsert: true, new: true }
+      { userId: userObjectId },
+      { lastActiveAt: new Date(), mode: StudentMode.AVAILABLE },
+      { upsert: true, returnDocument: 'after' }
     );
 
     return res.status(200).json({

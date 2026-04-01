@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -13,9 +14,11 @@ const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,9 +32,10 @@ const Register: React.FC = () => {
 
     try {
       // TODO: Replace with actual API call when auth endpoints are ready
-      toast.info('Please create user manually in MongoDB for now');
-      toast.info('Then use Login page with that user ID');
-      
+      // ✅ FIX TS2339: react-hot-toast has no .info() — use plain toast() instead
+      toast('Please create user manually in MongoDB for now');
+      toast('Then use Login page with that user ID');
+
       setTimeout(() => {
         navigate('/login');
       }, 2000);
@@ -41,6 +45,7 @@ const Register: React.FC = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
@@ -151,5 +156,6 @@ const Register: React.FC = () => {
     </div>
   );
 };
+
 
 export default Register;

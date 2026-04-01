@@ -1,5 +1,6 @@
 import api from './api';
 
+
 // Auth APIs
 export const authService = {
   login: async (email: string, password: string) => {
@@ -17,6 +18,7 @@ export const authService = {
     return response.data;
   },
 };
+
 
 // Session APIs
 export const sessionService = {
@@ -40,6 +42,7 @@ export const sessionService = {
     return response.data;
   },
 };
+
 
 // Personality APIs
 export const personalityService = {
@@ -67,6 +70,7 @@ export const personalityService = {
   },
 };
 
+
 // Contact APIs
 export const contactService = {
   getAll: async (userId: string) => {
@@ -89,6 +93,7 @@ export const contactService = {
     return response.data;
   },
 };
+
 
 // Status APIs
 export const statusService = {
@@ -113,6 +118,7 @@ export const statusService = {
   },
 };
 
+
 // Conversation APIs
 export const conversationService = {
   getAll: async (userId: string) => {
@@ -136,10 +142,47 @@ export const conversationService = {
   },
 };
 
+
 // Dashboard APIs
 export const dashboardService = {
   getSummary: async (userId: string) => {
     const response = await api.get(`/dashboard/summary?userId=${userId}`);
+    return response.data;
+  },
+};
+
+
+// Subscription APIs
+export const subscriptionService = {
+  get: async (userId: string) => {
+    const response = await api.get(`/subscription?userId=${userId}`);
+    return response.data;
+  },
+  
+  createOrder: async (userId: string, plan: 'basic' | 'pro') => {
+    const response = await api.post('/subscription/create-order', { userId, plan });
+    return response.data;
+  },
+  
+  verifyPayment: async (
+    userId: string,
+    orderId: string,
+    paymentId: string,
+    signature: string,
+    plan: 'basic' | 'pro'
+  ) => {
+    const response = await api.post('/subscription/verify-payment', {
+      userId,
+      orderId,
+      paymentId,
+      signature,
+      plan,
+    });
+    return response.data;
+  },
+  
+  cancel: async (userId: string) => {
+    const response = await api.delete('/subscription/cancel', { data: { userId } });
     return response.data;
   },
 };

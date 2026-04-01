@@ -6,6 +6,7 @@ import { MessageDirection, MessageStatus, MessageType } from '../types';
 import groqService from '../services/groq.service';
 import whatsappService from '../services/whatsapp.service';
 import { detectLanguage } from '../utils/language';
+import subscriptionService from '../services/subscription.service';
 
 
 interface ReplyJobData {
@@ -135,6 +136,14 @@ class ReplyWorker {
    * Validate all reply conditions
    */
   private async validateReplyConditions(userId: string, contactId: string): Promise<boolean> {
+    // Check 0: Subscription must be active or trial
+    const canUseAI = await subscriptionService.canUseAI(userId);
+
+    if (!canUseAI) {
+      console.log('❌ Subscription expired - AI features disabled');
+      return false;
+    }
+
     // Check 1: Student status must be "away"
     const studentStatus = await StudentStatus.findOne({ userId });
 
