@@ -1,6 +1,5 @@
 import api from './api';
 
-
 // Auth APIs
 export const authService = {
   login: async (email: string, password: string) => {
@@ -17,8 +16,12 @@ export const authService = {
     const response = await api.post('/auth/logout');
     return response.data;
   },
-};
 
+  getMe: async () => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+};
 
 // Session APIs
 export const sessionService = {
@@ -42,7 +45,6 @@ export const sessionService = {
     return response.data;
   },
 };
-
 
 // Personality APIs
 export const personalityService = {
@@ -70,7 +72,6 @@ export const personalityService = {
   },
 };
 
-
 // Contact APIs
 export const contactService = {
   getAll: async (userId: string) => {
@@ -93,7 +94,6 @@ export const contactService = {
     return response.data;
   },
 };
-
 
 // Status APIs
 export const statusService = {
@@ -118,7 +118,6 @@ export const statusService = {
   },
 };
 
-
 // Conversation APIs
 export const conversationService = {
   getAll: async (userId: string) => {
@@ -142,7 +141,6 @@ export const conversationService = {
   },
 };
 
-
 // Dashboard APIs
 export const dashboardService = {
   getSummary: async (userId: string) => {
@@ -150,7 +148,6 @@ export const dashboardService = {
     return response.data;
   },
 };
-
 
 // Subscription APIs
 export const subscriptionService = {

@@ -1,5 +1,20 @@
-import mongoose, { Schema } from 'mongoose';
-import { IWhatsAppSession, SessionStatus } from '../types';
+import mongoose, { Schema, Document } from 'mongoose';
+import { SessionStatus } from '../types';
+
+
+export interface IWhatsAppSession extends Document {
+  userId: mongoose.Types.ObjectId;
+  sessionId: string;
+  status: SessionStatus;
+  qrCode: string | null;
+  connectedAt: Date | null;
+  lastSeenAt: Date | null;
+  authState: any;
+  lidMap: Record<string, string>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 
 const WhatsAppSessionSchema = new Schema<IWhatsAppSession>(
   {
@@ -34,6 +49,14 @@ const WhatsAppSessionSchema = new Schema<IWhatsAppSession>(
     authState: {
       type: Schema.Types.Mixed,
       default: null
+    },
+    // Persists LID → phone mappings across server restarts.
+    // WhatsApp only sends contacts once (on first QR scan), so we
+    // store them here and reload on every restart instead of waiting
+    // for contacts.upsert which never fires on session restore.
+    lidMap: {
+      type: Schema.Types.Mixed,
+      default: {}
     }
   },
   {
@@ -41,9 +64,6 @@ const WhatsAppSessionSchema = new Schema<IWhatsAppSession>(
   }
 );
 
-// Indexes
-// WhatsAppSessionSchema.index({ userId: 1 });
-// WhatsAppSessionSchema.index({ sessionId: 1 });
 
 export const WhatsAppSession = mongoose.model<IWhatsAppSession>(
   'WhatsAppSession',

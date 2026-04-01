@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/apiService';
 import toast from 'react-hot-toast';
-
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -12,13 +13,12 @@ const Register: React.FC = () => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,24 +28,30 @@ const Register: React.FC = () => {
       return;
     }
 
+    if (formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Replace with actual API call when auth endpoints are ready
-      // ✅ FIX TS2339: react-hot-toast has no .info() — use plain toast() instead
-      toast('Please create user manually in MongoDB for now');
-      toast('Then use Login page with that user ID');
+      const response = await authService.register(
+        formData.name,
+        formData.email,
+        formData.password,
+        formData.phone
+      );
 
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      login(response.data.user, response.data.token);
+      toast.success('Registration successful! Welcome to Presenz 🎉');
+      navigate('/onboarding');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
@@ -156,6 +162,5 @@ const Register: React.FC = () => {
     </div>
   );
 };
-
 
 export default Register;

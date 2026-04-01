@@ -140,6 +140,9 @@ router.patch('/settings', async (req: Request, res: Response) => {
 /**
  * POST /api/v1/status/activity
  * Update last active timestamp (called by frontend periodically)
+ * ✅ FIXED: Only updates lastActiveAt — never touches mode
+ * Previously was resetting mode to "available" on every ping (every 30s)
+ * which was overriding any manual "away" status set by the user
  */
 router.post('/activity', async (req: Request, res: Response) => {
   try {
@@ -152,12 +155,11 @@ router.post('/activity', async (req: Request, res: Response) => {
       });
     }
 
-    // Cast string to ObjectId so upsert passes schema validation on new doc creation
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const status = await StudentStatus.findOneAndUpdate(
       { userId: userObjectId },
-      { lastActiveAt: new Date(), mode: StudentMode.AVAILABLE },
+      { lastActiveAt: new Date() }, // ✅ ONLY timestamp — mode is never touched
       { upsert: true, returnDocument: 'after' }
     );
 

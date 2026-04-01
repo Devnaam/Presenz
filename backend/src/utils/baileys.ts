@@ -67,3 +67,7 @@ export const getMessageType = (message: proto.IWebMessageInfo): 'text' | 'voice'
   if (getMessageText(message)) return 'text';
   return 'other';
 };
+
+export const normalizePhoneNumber = (phone: string): string => {
+  return phone.replace(/\D/g, ''); // strips +, spaces, dashes — digits only
+};

@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
 import whatsappService from '../services/whatsapp.service';
-
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
+// All routes require authentication
+router.use(authenticate);
 
 /**
  * POST /api/v1/session/create
@@ -11,29 +13,15 @@ const router = Router();
  */
 router.post('/create', async (req: Request, res: Response) => {
   try {
-    // TODO: Get userId from JWT auth middleware (Phase 5)
-    // For now, we'll use a test userId from request body
-    const { userId } = req.body;
-
-
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        message: 'userId is required'
-      });
-      return;
-    }
-
+    const userId = req.userId!; // From auth middleware
 
     const result = await whatsappService.createSession(userId);
-
 
     res.status(201).json({
       success: true,
       message: 'Session created. Please scan QR code.',
       data: result
     });
-
 
   } catch (error: any) {
     console.error('Create session error:', error);
@@ -44,33 +32,20 @@ router.post('/create', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * GET /api/v1/session/qr
  * Get QR code for scanning (polling endpoint)
  */
 router.get('/qr', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.query;
+    const userId = req.userId!;
 
-
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        message: 'userId is required'
-      });
-      return;
-    }
-
-
-    const status = await whatsappService.getSessionStatus(userId as string);
-
+    const status = await whatsappService.getSessionStatus(userId);
 
     res.status(200).json({
       success: true,
       data: status
     });
-
 
   } catch (error: any) {
     console.error('Get QR error:', error);
@@ -81,33 +56,20 @@ router.get('/qr', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * GET /api/v1/session/status
  * Get current session connection status
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.query;
+    const userId = req.userId!;
 
-
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        message: 'userId is required'
-      });
-      return;
-    }
-
-
-    const status = await whatsappService.getSessionStatus(userId as string);
-
+    const status = await whatsappService.getSessionStatus(userId);
 
     res.status(200).json({
       success: true,
       data: status
     });
-
 
   } catch (error: any) {
     res.status(500).json({
@@ -117,33 +79,29 @@ router.get('/status', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * POST /api/v1/session/send
  * Send a test message (for development)
  */
 router.post('/send', async (req: Request, res: Response) => {
   try {
-    const { userId, phoneNumber, message } = req.body;
+    const userId = req.userId!;
+    const { phoneNumber, message } = req.body;
 
-
-    if (!userId || !phoneNumber || !message) {
+    if (!phoneNumber || !message) {
       res.status(400).json({
         success: false,
-        message: 'userId, phoneNumber, and message are required'
+        message: 'phoneNumber and message are required'
       });
       return;
     }
 
-
     await whatsappService.sendMessage(userId, phoneNumber, message);
-
 
     res.status(200).json({
       success: true,
       message: 'Message sent successfully'
     });
-
 
   } catch (error: any) {
     console.error('Send message error:', error);
@@ -154,33 +112,20 @@ router.post('/send', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * DELETE /api/v1/session/disconnect
  * Disconnect and logout from WhatsApp
  */
 router.delete('/disconnect', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.body;
-
-
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        message: 'userId is required'
-      });
-      return;
-    }
-
+    const userId = req.userId!;
 
     await whatsappService.disconnectSession(userId);
-
 
     res.status(200).json({
       success: true,
       message: 'Session disconnected successfully'
     });
-
 
   } catch (error: any) {
     console.error('Disconnect error:', error);
@@ -190,6 +135,5 @@ router.delete('/disconnect', async (req: Request, res: Response) => {
     });
   }
 });
-
 
 export default router;

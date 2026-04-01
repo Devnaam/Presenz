@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/apiService';
 import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
@@ -15,25 +16,9 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      // TODO: Replace with actual API call when auth endpoints are ready
-      // For now, using test user
-      const testUser = {
-        _id: localStorage.getItem('testUserId') || '',
-        name: 'Test User',
-        email,
-        phone: '+919999999999',
-        subscriptionStatus: 'trial' as const,
-      };
-
-      const testToken = 'test-token-' + Date.now();
-
-      if (!testUser._id) {
-        toast.error('Please create a test user in MongoDB first');
-        setLoading(false);
-        return;
-      }
-
-      login(testUser, testToken);
+      const response = await authService.login(email, password);
+      
+      login(response.data.user, response.data.token);
       toast.success('Login successful!');
       navigate('/dashboard');
     } catch (error: any) {
@@ -100,16 +85,6 @@ const Login: React.FC = () => {
               <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">
                 Sign up
               </Link>
-            </p>
-          </div>
-
-          {/* Test User Helper */}
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-xs text-yellow-800">
-              <strong>Test Mode:</strong> Enter the MongoDB User ID in your browser console:
-              <code className="block mt-1 p-2 bg-white rounded text-xs">
-                localStorage.setItem('testUserId', 'YOUR_USER_ID_HERE')
-              </code>
             </p>
           </div>
         </div>
