@@ -4,6 +4,8 @@ import { hashPassword, comparePassword, generateToken } from '../utils/auth';
 import { authenticate } from '../middleware/auth.middleware';
 import { registerValidation, loginValidation } from '../middleware/validation.middleware';
 import { StudentMode, SubscriptionStatus } from '../types';
+import bcrypt from 'bcryptjs'; // make sure this is already imported at the top
+
 
 const router = Router();
 
@@ -171,6 +173,72 @@ router.post('/logout', authenticate, async (_req: Request, res: Response) => {
     success: true,
     message: 'Logged out successfully'
   });
+});
+
+/**
+ * PATCH /api/v1/auth/change-password
+ * NEW
+ */
+router.patch('/change-password', async (req: Request, res: Response) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'userId, currentPassword, and newPassword are required'
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters'
+      });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'New password must be different from current password'
+      });
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+      return;
+    }
+
+    // Hash and save new password
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to change password'
+    });
+  }
 });
 
 export default router;

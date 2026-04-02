@@ -19,6 +19,8 @@ export const authService = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+  changePassword: (userId: string, currentPassword: string, newPassword: string) =>
+    api.patch('/auth/change-password', { userId, currentPassword, newPassword }),
 };
 
 
@@ -149,8 +151,8 @@ export const conversationService = {
 
 // Dashboard APIs — UNCHANGED
 export const dashboardService = {
-  getSummary: async (userId: string) => {
-    const response = await api.get(`/dashboard/summary?userId=${userId}`);
+  getSummary: async (userId: string, period: 'today' | '7days' | '30days' = 'today') => {
+    const response = await api.get(`/dashboard/summary?userId=${userId}&period=${period}`);
     return response.data;
   },
 };
@@ -182,4 +184,30 @@ export const subscriptionService = {
     const response = await api.delete('/subscription/cancel', { data: { userId } });
     return response.data;
   },
+};
+
+
+export const profileService = {
+  getProfile: (userId: string) =>
+    api.get(`/profile?userId=${userId}`),
+
+  updateBasic: (userId: string, data: { name: string; email: string; phone: string }) =>
+    api.patch(`/profile/${userId}/basic`, data),
+
+  updateProfile: (userId: string, data: {
+    aboutMe: string;
+    aiLanguage: string;
+    aiTone: string;
+    aiLength: string;
+  }) =>
+    api.patch(`/profile/${userId}`, data),
+};
+
+
+export const activityService = {
+  getLog: (userId: string, page = 1, filter = 'all') =>
+    api.get(`/activity?userId=${userId}&page=${page}&filter=${filter}`),
+
+  getStats: (userId: string) =>
+    api.get(`/activity/stats?userId=${userId}`),
 };

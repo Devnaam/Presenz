@@ -8,7 +8,11 @@ import whatsappService from './services/whatsapp.service';
 import { startCleanupCron, startSubscriptionCron } from './utils/cron';
 import { logger } from './config/logger';
 import { errorHandler } from './middleware/error.middleware';
-import { apiLimiter, authLimiter } from './middleware/rateLimit.middleware';
+import { apiLimiter, authLimiter, readLimiter } from './middleware/rateLimit.middleware';
+import profileRoutes from './routes/profile.routes'; // ADD import
+import activityRoutes from './routes/activity.routes'; // ADD
+
+
 
 // Import configurations
 import './config/redis';
@@ -81,9 +85,11 @@ app.use('/api/v1/session', sessionRoutes);
 app.use('/api/v1/personality', personalityRoutes);
 app.use('/api/v1/contacts', contactRoutes);
 app.use('/api/v1/status', statusRoutes);
-app.use('/api/v1/conversations', conversationRoutes);
-app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/subscription', subscriptionRoutes);
+app.use('/api/v1/conversations', readLimiter, conversationRoutes);
+app.use('/api/v1/dashboard', readLimiter, dashboardRoutes);
+app.use('/api/v1/activity', readLimiter, activityRoutes);
+app.use('/api/v1/profile', readLimiter, profileRoutes);
 
 // Test route
 app.get('/api/v1/test', (_req: Request, res: Response) => {

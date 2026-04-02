@@ -5,6 +5,7 @@ import { Conversation, Message } from '../types';
 import { MessageCircle, Send, ArrowLeft, Mic, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+
 const Conversations: React.FC = () => {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -14,15 +15,39 @@ const Conversations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
+
+  // Initial load
   useEffect(() => {
     loadConversations();
   }, []);
 
+
+  // Load messages when contact selected
   useEffect(() => {
     if (selectedContact) {
       loadMessages(selectedContact._id);
     }
   }, [selectedContact]);
+
+
+  // NEW: Poll messages every 8 seconds while a contact is open
+  useEffect(() => {
+    if (!selectedContact) return;
+    const interval = setInterval(() => {
+      loadMessages(selectedContact._id);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [selectedContact]);
+
+
+  // NEW: Refresh conversation list every 15 seconds (unread counts, last message)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadConversations();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
 
   const loadConversations = async () => {
     try {
@@ -35,6 +60,7 @@ const Conversations: React.FC = () => {
     }
   };
 
+
   const loadMessages = async (contactId: string) => {
     try {
       const response = await conversationService.getMessages(user!._id, contactId);
@@ -43,6 +69,7 @@ const Conversations: React.FC = () => {
       toast.error('Failed to load messages');
     }
   };
+
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +88,7 @@ const Conversations: React.FC = () => {
     }
   };
 
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -69,11 +97,13 @@ const Conversations: React.FC = () => {
     );
   }
 
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)]">
+
         {/* Contacts List */}
         <div className="lg:col-span-1 card overflow-hidden">
           <div className="p-4 border-b border-gray-200">
@@ -81,7 +111,7 @@ const Conversations: React.FC = () => {
           </div>
           <div className="overflow-y-auto h-full">
             {conversations.length > 0 ? (
-              conversations.map((conv) => (
+              conversations.map((conv: any) => (
                 <button
                   key={conv.contact._id}
                   onClick={() => setSelectedContact(conv.contact)}
@@ -136,18 +166,16 @@ const Conversations: React.FC = () => {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg) => (
+                {messages.map((msg: any) => (
                   <div
                     key={msg._id}
                     className={`flex ${msg.direction === 'outgoing' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        msg.direction === 'outgoing'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-200 text-gray-900'
-                      }`}
-                    >
+                    <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      msg.direction === 'outgoing'
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-200 text-gray-900'
+                    }`}>
                       {msg.type === 'voice_note' && msg.transcribedText && (
                         <div className="flex items-center mb-1 text-xs opacity-75">
                           <Mic className="w-3 h-3 mr-1" />
@@ -199,9 +227,11 @@ const Conversations: React.FC = () => {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
 };
+
 
 export default Conversations;

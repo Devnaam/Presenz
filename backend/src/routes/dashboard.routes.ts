@@ -8,11 +8,11 @@ const router = Router();
 
 /**
  * GET /api/v1/dashboard/summary
- * Get dashboard summary statistics
+ * CHANGED: accepts ?period=today|7days|30days
  */
 router.get('/summary', async (req: Request, res: Response) => {
   try {
-    const { userId } = req.query;
+    const { userId, period = 'today' } = req.query;
 
     if (!userId) {
       return res.status(400).json({
@@ -21,38 +21,46 @@ router.get('/summary', async (req: Request, res: Response) => {
       });
     }
 
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // NEW: calculate date range based on period
+    const endDate = new Date();
+    let startDate = new Date();
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (period === '7days') {
+      startDate.setDate(startDate.getDate() - 7);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (period === '30days') {
+      startDate.setDate(startDate.getDate() - 30);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      // today (default)
+      startDate.setHours(0, 0, 0, 0);
+    }
 
-    // Count messages received today
+    // Count messages received in period
     const messagesReceived = await Message.countDocuments({
       userId,
       direction: MessageDirection.INCOMING,
-      timestamp: { $gte: today, $lt: tomorrow }
+      timestamp: { $gte: startDate, $lte: endDate }
     });
 
-    // Count AI replies sent today
+    // Count AI replies sent in period
     const aiRepliesSent = await Message.countDocuments({
       userId,
       direction: MessageDirection.OUTGOING,
       generatedByAI: true,
-      timestamp: { $gte: today, $lt: tomorrow }
+      timestamp: { $gte: startDate, $lte: endDate }
     });
 
-    // Count active contacts
+    // Active contacts — always current, not period-bound
     const activeContacts = await FamilyContact.countDocuments({
       userId,
       isActive: true
     });
 
-    // Get student status
+    // Student status
     const studentStatus = await StudentStatus.findOne({ userId });
 
-    // Get recent activity (last 5 messages)
+    // Recent activity — last 5 messages always
     const recentMessages = await Message.find({ userId })
       .sort({ timestamp: -1 })
       .limit(5)

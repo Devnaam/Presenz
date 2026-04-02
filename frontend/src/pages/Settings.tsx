@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { statusService, sessionService } from '../services/apiService';
 import { StudentStatus } from '../types';
-import { Settings as SettingsIcon, Smartphone, Clock, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, Smartphone, Clock, LogOut, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import WhatsAppQRModal from '../components/WhatsAppQRModal'; // NEW
+
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -11,10 +13,13 @@ const Settings: React.FC = () => {
   const [sessionStatus, setSessionStatus] = useState<string>('disconnected');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false); // NEW
+
 
   useEffect(() => {
     loadSettings();
   }, []);
+
 
   const loadSettings = async () => {
     try {
@@ -22,7 +27,6 @@ const Settings: React.FC = () => {
         statusService.get(user!._id),
         sessionService.getStatus(user!._id),
       ]);
-
       setStatus(statusRes.data);
       setSessionStatus(sessionRes.data.status);
     } catch (error: any) {
@@ -32,16 +36,12 @@ const Settings: React.FC = () => {
     }
   };
 
+
   const handleSaveSettings = async () => {
     if (!status) return;
-
     setSaving(true);
     try {
-      await statusService.updateSettings(
-        user!._id,
-        status.autoAwayEnabled,
-        status.autoAwayMinutes
-      );
+      await statusService.updateSettings(user!._id, status.autoAwayEnabled, status.autoAwayMinutes);
       toast.success('Settings saved successfully!');
     } catch (error: any) {
       toast.error('Failed to save settings');
@@ -50,11 +50,9 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleDisconnectWhatsApp = async () => {
-    if (!window.confirm('Are you sure you want to disconnect WhatsApp?')) {
-      return;
-    }
 
+  const handleDisconnectWhatsApp = async () => {
+    if (!window.confirm('Are you sure you want to disconnect WhatsApp?')) return;
     try {
       await sessionService.disconnect(user!._id);
       setSessionStatus('disconnected');
@@ -64,6 +62,14 @@ const Settings: React.FC = () => {
     }
   };
 
+
+  // NEW: called by WhatsAppQRModal when scan succeeds
+  const handleReconnected = () => {
+    setSessionStatus('connected');
+    toast.success('WhatsApp reconnected!');
+  };
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -72,9 +78,11 @@ const Settings: React.FC = () => {
     );
   }
 
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+
 
       {/* WhatsApp Connection */}
       <div className="card p-6">
@@ -82,7 +90,6 @@ const Settings: React.FC = () => {
           <Smartphone className="w-6 h-6 text-primary-600 mr-3" />
           <h3 className="text-lg font-semibold text-gray-900">WhatsApp Connection</h3>
         </div>
-
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-600">Status</p>
@@ -92,7 +99,9 @@ const Settings: React.FC = () => {
               {sessionStatus === 'connected' ? 'Connected' : 'Disconnected'}
             </p>
           </div>
-          {sessionStatus === 'connected' && (
+
+          {/* CHANGED: shows Disconnect when connected, Reconnect when disconnected */}
+          {sessionStatus === 'connected' ? (
             <button
               onClick={handleDisconnectWhatsApp}
               className="btn btn-danger flex items-center"
@@ -100,17 +109,25 @@ const Settings: React.FC = () => {
               <LogOut className="w-5 h-5 mr-2" />
               Disconnect
             </button>
+          ) : (
+            <button
+              onClick={() => setShowQRModal(true)}
+              className="btn btn-primary flex items-center"
+            >
+              <RefreshCw className="w-5 h-5 mr-2" />
+              Reconnect WhatsApp
+            </button>
           )}
         </div>
       </div>
 
-      {/* Auto-Away Settings */}
+
+      {/* Auto-Away Settings — UNCHANGED */}
       <div className="card p-6">
         <div className="flex items-center mb-4">
           <Clock className="w-6 h-6 text-primary-600 mr-3" />
           <h3 className="text-lg font-semibold text-gray-900">Auto-Away Settings</h3>
         </div>
-
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -120,16 +137,16 @@ const Settings: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={() => setStatus({ ...status!, autoAwayEnabled: !status!.autoAwayEnabled })}
+              onClick={() =>
+                setStatus({ ...status!, autoAwayEnabled: !status!.autoAwayEnabled })
+              }
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                 status?.autoAwayEnabled ? 'bg-primary-600' : 'bg-gray-200'
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  status?.autoAwayEnabled ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                status?.autoAwayEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
             </button>
           </div>
 
@@ -140,10 +157,12 @@ const Settings: React.FC = () => {
               </label>
               <input
                 type="number"
-                min="5"
-                max="120"
+                min={5}
+                max={120}
                 value={status.autoAwayMinutes}
-                onChange={(e) => setStatus({ ...status, autoAwayMinutes: Number(e.target.value) })}
+                onChange={(e) =>
+                  setStatus({ ...status, autoAwayMinutes: Number(e.target.value) })
+                }
                 className="input max-w-xs"
               />
               <p className="text-sm text-gray-500 mt-1">
@@ -152,7 +171,6 @@ const Settings: React.FC = () => {
             </div>
           )}
         </div>
-
         <button
           onClick={handleSaveSettings}
           disabled={saving}
@@ -162,13 +180,13 @@ const Settings: React.FC = () => {
         </button>
       </div>
 
-      {/* Account Info */}
+
+      {/* Account Info — UNCHANGED */}
       <div className="card p-6">
         <div className="flex items-center mb-4">
           <SettingsIcon className="w-6 h-6 text-primary-600 mr-3" />
           <h3 className="text-lg font-semibold text-gray-900">Account Information</h3>
         </div>
-
         <div className="space-y-3">
           <div>
             <p className="text-sm text-gray-600">Name</p>
@@ -196,8 +214,19 @@ const Settings: React.FC = () => {
           </div>
         </div>
       </div>
+
+
+      {/* NEW: WhatsApp QR Modal */}
+      <WhatsAppQRModal
+        userId={user!._id}
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+        onConnected={handleReconnected}
+      />
+
     </div>
   );
 };
+
 
 export default Settings;

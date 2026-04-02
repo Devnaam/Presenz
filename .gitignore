@@ -50,3 +50,5 @@ temp/
 
 # Railway/Render deployment
 .railway/
+
+plan.md

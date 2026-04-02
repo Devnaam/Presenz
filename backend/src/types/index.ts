@@ -155,3 +155,36 @@ export interface ISubscription extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+
+// ADD at the bottom of types/index.ts
+
+export enum AILanguage {
+  AUTO = 'auto',
+  ENGLISH = 'english',
+  HINDI = 'hindi',
+  HINGLISH = 'hinglish',
+  TAMIL = 'tamil',
+}
+
+export enum AITone {
+  CASUAL = 'casual',
+  FRIENDLY = 'friendly',
+  PROFESSIONAL = 'professional',
+}
+
+export enum AILength {
+  SHORT = 'short',
+  MEDIUM = 'medium',
+  MATCH = 'match',
+}
+
+export interface IUserProfile extends Document {
+  userId: Types.ObjectId;
+  aboutMe: string;
+  aiLanguage: AILanguage;
+  aiTone: AITone;
+  aiLength: AILength;
+  createdAt: Date;
+  updatedAt: Date;
+}

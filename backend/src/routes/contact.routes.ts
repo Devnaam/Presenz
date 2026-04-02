@@ -14,25 +14,41 @@ router.get('/', async (req: Request, res: Response) => {
     const { userId } = req.query;
 
     if (!userId) {
-      res.status(400).json({
-        success: false,
-        message: 'userId is required'
-      });
+      res.status(400).json({ success: false, message: 'userId is required' });
       return;
     }
 
     const contacts = await FamilyContact.find({ userId }).sort({ createdAt: -1 });
 
+    // Fetch all personality profiles for these contacts in one query
+    const contactIds = contacts.map((c) => c._id);
+    const profiles = await PersonalityProfile.find({
+      contactId: { $in: contactIds }
+    }).lean();
+
+    // Build lookup map: contactId → profile
+    const profileMap = profiles.reduce((acc: Record<string, any>, p) => {
+      acc[p.contactId.toString()] = p;
+      return acc;
+    }, {});
+
+    // Attach aiStatus to every contact
+    const enrichedContacts = contacts.map((contact) => {
+      const profile = profileMap[contact._id.toString()];
+      let aiStatus: 'ready' | 'partial' | 'none' = 'none';
+      if (profile) {
+        aiStatus = profile.knowledgeBase ? 'ready' : 'partial';
+      }
+      return { ...contact.toObject(), aiStatus };
+    });
+
     res.status(200).json({
       success: true,
-      data: contacts
+      data: enrichedContacts
     });
 
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch contacts'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to fetch contacts' });
   }
 });
 

@@ -2,12 +2,14 @@ import React, { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { statusService } from '../services/apiService';
-import { Home, MessageCircle, Users, Settings, LogOut, Menu, X } from 'lucide-react';
+import { Home, MessageCircle, Users, Settings, LogOut, Menu, X, User, Activity } from 'lucide-react'; // added User
 import { useState } from 'react';
+
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
@@ -15,7 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Update activity every 30 seconds
+
   useEffect(() => {
     const updateActivity = async () => {
       if (user) {
@@ -29,21 +31,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
     updateActivity();
     const interval = setInterval(updateActivity, 30000);
-
     return () => clearInterval(interval);
   }, [user]);
+
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Conversations', href: '/conversations', icon: MessageCircle },
     { name: 'Contacts', href: '/contacts', icon: Users },
+    { name: 'Profile', href: '/profile', icon: User },   // NEW
     { name: 'Settings', href: '/settings', icon: Settings },
+    { name: 'Activity', href: '/activity', icon: Activity },
   ];
+
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,5 +152,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     </div>
   );
 };
+
 
 export default Layout;
