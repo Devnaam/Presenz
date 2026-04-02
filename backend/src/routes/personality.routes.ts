@@ -17,7 +17,7 @@ const upload = multer({
 
 /**
  * POST /api/v1/personality/upload
- * Upload and process WhatsApp chat export
+ * UNCHANGED
  */
 router.post('/upload', upload.single('chatFile'), async (req: Request, res: Response) => {
   try {
@@ -39,10 +39,8 @@ router.post('/upload', upload.single('chatFile'), async (req: Request, res: Resp
       return;
     }
 
-    // Convert buffer to string
     const fileContent = req.file.buffer.toString('utf-8');
 
-    // Process the chat export
     const result = await personalityService.processChatExport(
       userId,
       contactId,
@@ -68,7 +66,7 @@ router.post('/upload', upload.single('chatFile'), async (req: Request, res: Resp
 
 /**
  * GET /api/v1/personality/status
- * Check if personality profile exists
+ * UNCHANGED
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
@@ -103,7 +101,7 @@ router.get('/status', async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/personality/test
- * Test the AI with a sample message
+ * UNCHANGED
  */
 router.post('/test', async (req: Request, res: Response) => {
   try {
@@ -139,7 +137,7 @@ router.post('/test', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/v1/personality/reset
- * Delete personality profile
+ * UNCHANGED
  */
 router.delete('/reset', async (req: Request, res: Response) => {
   try {
@@ -164,6 +162,129 @@ router.delete('/reset', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete profile'
+    });
+  }
+});
+
+
+/**
+ * PATCH /api/v1/personality/knowledge-base
+ * UNCHANGED
+ */
+router.patch('/knowledge-base', async (req: Request, res: Response) => {
+  try {
+    const { userId, contactId, knowledgeBase } = req.body;
+
+    if (!userId || !contactId) {
+      res.status(400).json({
+        success: false,
+        message: 'userId and contactId are required'
+      });
+      return;
+    }
+
+    if (typeof knowledgeBase !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'knowledgeBase must be a string'
+      });
+      return;
+    }
+
+    await personalityService.saveKnowledgeBase(userId, contactId, knowledgeBase.trim());
+
+    res.status(200).json({
+      success: true,
+      message: 'Knowledge base saved successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Save knowledge base error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save knowledge base'
+    });
+  }
+});
+
+
+/**
+ * GET /api/v1/personality/knowledge-base
+ * UNCHANGED
+ */
+router.get('/knowledge-base', async (req: Request, res: Response) => {
+  try {
+    const { userId, contactId } = req.query;
+
+    if (!userId || !contactId) {
+      res.status(400).json({
+        success: false,
+        message: 'userId and contactId are required'
+      });
+      return;
+    }
+
+    const knowledgeBase = await personalityService.getKnowledgeBase(
+      userId as string,
+      contactId as string
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { knowledgeBase }
+    });
+
+  } catch (error: any) {
+    console.error('Get knowledge base error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get knowledge base'
+    });
+  }
+});
+
+
+/**
+ * POST /api/v1/personality/enhance-context
+ * Takes rough user notes → returns AI-expanded paragraph
+ * NEW
+ */
+router.post('/enhance-context', async (req: Request, res: Response) => {
+  try {
+    const { roughText, contactName, relation } = req.body;
+
+    if (!roughText || !contactName || !relation) {
+      res.status(400).json({
+        success: false,
+        message: 'roughText, contactName, and relation are required'
+      });
+      return;
+    }
+
+    if (roughText.trim().length < 5) {
+      res.status(400).json({
+        success: false,
+        message: 'Please write at least a few words before enhancing'
+      });
+      return;
+    }
+
+    const enhanced = await groqService.enhanceContext(
+      roughText.trim(),
+      contactName,
+      relation
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { enhanced }
+    });
+
+  } catch (error: any) {
+    console.error('Enhance context error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to enhance context'
     });
   }
 });

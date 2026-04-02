@@ -517,7 +517,7 @@ class WhatsAppService {
       // ═══════════════════════════════════════════════════════════
       // ENHANCED LID RESOLUTION WITH FALLBACK MATCHING
       // ═══════════════════════════════════════════════════════════
-      
+
 
       // Resolve @lid → real phone number
       let resolvedPhone = senderPhone;
@@ -817,6 +817,88 @@ class WhatsAppService {
     }
   }
 
+
+  /**
+ * Mark a WhatsApp message as read.
+ * Called before starting to type — mirrors real human behavior.
+ */
+  async markAsRead(
+    userId: string,
+    phoneNumber: string,
+    whatsappMessageId: string | undefined
+  ): Promise<void> {
+    try {
+      if (!whatsappMessageId) return;
+
+      const session = await WhatsAppSession.findOne({
+        userId,
+        status: SessionStatus.CONNECTED
+      });
+      if (!session) return;
+
+      const sock = activeSockets.get(session.sessionId);
+      if (!sock) return;
+
+      const jid = formatPhoneNumber(phoneNumber);
+      await sock.readMessages([{
+        remoteJid: jid,
+        id: whatsappMessageId,
+        fromMe: false
+      }]);
+
+    } catch (error) {
+      // Non-critical — log but don't throw
+      console.error('❌ [READ] Error marking message as read:', error);
+    }
+  }
+
+
+  /**
+   * Show "typing..." indicator to the other person.
+   * Call this before generating/sending a reply.
+   */
+  async sendTypingIndicator(userId: string, phoneNumber: string): Promise<void> {
+    try {
+      const session = await WhatsAppSession.findOne({
+        userId,
+        status: SessionStatus.CONNECTED
+      });
+      if (!session) return;
+
+      const sock = activeSockets.get(session.sessionId);
+      if (!sock) return;
+
+      const jid = formatPhoneNumber(phoneNumber);
+      await sock.sendPresenceUpdate('composing', jid);
+
+    } catch (error) {
+      console.error('❌ [TYPING] Error sending typing indicator:', error);
+    }
+  }
+
+
+  /**
+   * Stop "typing..." indicator.
+   * Call this after all message parts are sent, or on error.
+   */
+  async stopTypingIndicator(userId: string, phoneNumber: string): Promise<void> {
+    try {
+      const session = await WhatsAppSession.findOne({
+        userId,
+        status: SessionStatus.CONNECTED
+      });
+      if (!session) return;
+
+      const sock = activeSockets.get(session.sessionId);
+      if (!sock) return;
+
+      const jid = formatPhoneNumber(phoneNumber);
+      await sock.sendPresenceUpdate('paused', jid);
+
+    } catch (error) {
+      console.error('❌ [TYPING] Error stopping typing indicator:', error);
+    }
+  }
 
 
   /**

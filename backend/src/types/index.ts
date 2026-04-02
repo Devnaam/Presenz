@@ -108,6 +108,7 @@ export interface IPersonalityProfile extends Document {
   messageCount: number;
   dominantLanguages: string[];
   systemPrompt: string;
+  knowledgeBase?: string;    // ← ONLY NEW LINE
   createdAt: Date;
   updatedAt: Date;
 }

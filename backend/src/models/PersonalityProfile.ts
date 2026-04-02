@@ -55,6 +55,10 @@ const PersonalityProfileSchema = new Schema<IPersonalityProfile>(
     systemPrompt: {
       type: String,
       default: ''
+    },
+    knowledgeBase: {          // ← ONLY NEW LINE
+      type: String,
+      default: ''
     }
   },
   {
