@@ -9,6 +9,7 @@ import { detectLanguage } from '../utils/language';
 import subscriptionService from '../services/subscription.service';
 
 
+
 interface ReplyJobData {
   userId: string;
   contactId: string;
@@ -18,11 +19,13 @@ interface ReplyJobData {
 }
 
 
+
 /**
  * Reply Worker - Processes messages and generates AI replies
  */
 class ReplyWorker {
   private worker: Worker;
+
 
 
   constructor() {
@@ -41,8 +44,10 @@ class ReplyWorker {
       }
     );
 
+
     this.setupEventHandlers();
   }
+
 
 
   /**
@@ -51,27 +56,34 @@ class ReplyWorker {
   private async processReplyJob(job: Job<ReplyJobData>): Promise<void> {
     const { userId, contactId, messageId, messageText } = job.data;
 
+
     console.log(`🔄 Processing reply job for message: ${messageId}`);
+
 
     try {
       // Step 1: Validate all conditions again (in case state changed)
       const isValid = await this.validateReplyConditions(userId, contactId);
+
 
       if (!isValid) {
         console.log('⚠️ Reply conditions not met - skipping');
         return;
       }
 
+
       // Step 2: Check rate limiting (no reply within last 60 seconds)
-      const shouldRateLimit = await this.checkRateLimit(userId, contactId);
+      const shouldRateLimit = await this.checkRateLimit(userId, contactId, messageId);
+
 
       if (shouldRateLimit) {
         console.log('⏱️ Rate limit active - skipping reply');
         return;
       }
 
+
       // Step 3: Detect language
       const language = detectLanguage(messageText);
+
 
       // Step 4: Generate AI reply
       console.log('🤖 Generating AI reply...');
@@ -82,20 +94,26 @@ class ReplyWorker {
         language
       );
 
+
       if (!aiReply) {
         throw new Error('AI failed to generate reply');
       }
 
+
       console.log(`✅ AI Reply: ${aiReply}`);
+
 
       // Step 5: Send via WhatsApp
       const contact = await FamilyContact.findById(contactId);
+
 
       if (!contact) {
         throw new Error('Contact not found');
       }
 
+
       await whatsappService.sendMessage(userId, contact.phone, aiReply);
+
 
       // Step 6: Save outgoing message to database
       await Message.create({
@@ -112,24 +130,30 @@ class ReplyWorker {
         timestamp: new Date()
       });
 
+
       // Step 7: Update original incoming message status
       await Message.findByIdAndUpdate(messageId, {
         status: MessageStatus.REPLIED
       });
 
+
       console.log(`✅ Reply sent successfully to ${contact.name}`);
+
 
     } catch (error: any) {
       console.error('❌ Error processing reply job:', error);
+
 
       // Update message status to failed
       await Message.findByIdAndUpdate(messageId, {
         status: MessageStatus.FAILED
       });
 
+
       throw error; // Re-throw to trigger retry
     }
   }
+
 
 
   /**
@@ -139,54 +163,80 @@ class ReplyWorker {
     // Check 0: Subscription must be active or trial
     const canUseAI = await subscriptionService.canUseAI(userId);
 
+
     if (!canUseAI) {
       console.log('❌ Subscription expired - AI features disabled');
       return false;
     }
 
+
     // Check 1: Student status must be "away"
     const studentStatus = await StudentStatus.findOne({ userId });
+
 
     if (!studentStatus || studentStatus.mode === 'available') {
       console.log('❌ Student is available');
       return false;
     }
 
+
     // Check 2: Contact must be active
     const contact = await FamilyContact.findById(contactId);
+
 
     if (!contact || !contact.isActive) {
       console.log('❌ Contact is not active');
       return false;
     }
 
+
     // Check 3: Personality profile must exist
     const profile = await PersonalityProfile.findOne({ userId, contactId });
+
 
     if (!profile || !profile.systemPrompt) {
       console.log('❌ No personality profile found');
       return false;
     }
 
+
     return true;
   }
 
 
-  /**
-   * Check if we should rate limit (replied within last 60 seconds)
-   */
-  private async checkRateLimit(userId: string, contactId: string): Promise<boolean> {
-    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
 
-    const recentReply = await Message.findOne({
+  /**
+   * Check if we should rate limit.
+   * Skips only if we already replied AFTER this specific incoming message arrived.
+   * Prevents duplicate replies from re-queued jobs while allowing every new message to get a reply.
+   * A 5-second cooldown window is used to safely debounce near-simultaneous jobs.
+   */
+  private async checkRateLimit(userId: string, contactId: string, messageId: string): Promise<boolean> {
+    const COOLDOWN_MS = 5 * 1000;
+
+    // Get the timestamp of the incoming message being processed
+    const incomingMessage = await Message.findById(messageId);
+
+    if (!incomingMessage) return false;
+
+    // Get the most recent outgoing reply for this contact
+    const lastReply = await Message.findOne({
       userId,
       contactId,
       direction: MessageDirection.OUTGOING,
-      timestamp: { $gte: sixtySecondsAgo }
-    });
+    }).sort({ timestamp: -1 });
 
-    return !!recentReply;
+    if (!lastReply) return false;
+
+    // Only rate limit if:
+    // 1. We replied very recently (within 5s) — debounces duplicate jobs
+    // 2. AND that reply is newer than this incoming message — means we already handled it
+    const repliedRecently = (Date.now() - lastReply.timestamp.getTime()) < COOLDOWN_MS;
+    const alreadyRepliedToThis = lastReply.timestamp >= incomingMessage.timestamp;
+
+    return repliedRecently && alreadyRepliedToThis;
   }
+
 
 
   /**
@@ -197,16 +247,20 @@ class ReplyWorker {
       console.log(`✅ Worker completed job ${job.id}`);
     });
 
+
     this.worker.on('failed', (job, err) => {
       console.error(`❌ Worker failed job ${job?.id}:`, err.message);
     });
+
 
     this.worker.on('error', (err) => {
       console.error('❌ Worker error:', err);
     });
 
+
     console.log('👷 Reply Worker started');
   }
+
 
 
   /**
@@ -217,6 +271,7 @@ class ReplyWorker {
     console.log('🔌 Reply Worker closed');
   }
 }
+
 
 
 export default new ReplyWorker();
