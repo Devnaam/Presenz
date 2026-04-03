@@ -67,7 +67,7 @@ class ReplyWorker {
       // bursts into a single coherent reply.
       // ─────────────────────────────────────────────────────────────────
       console.log('⏳ [DEBOUNCE] Waiting 4s for burst messages...');
-      await this.sleep(4000);
+      await this.sleep(1000);
 
       const incomingMessage = await Message.findById(messageId);
       if (!incomingMessage) {
@@ -112,7 +112,7 @@ class ReplyWorker {
         );
         console.log('👁️ [READ] Message marked as read');
         // Short human pause after reading before starting to type
-        await this.sleep(800 + Math.random() * 700);
+        await this.sleep(300 + Math.random() * 200);
       }
 
       // Step 7: Detect language
@@ -156,7 +156,7 @@ class ReplyWorker {
         if (i > 0) {
           // Brief pause between parts — person typed the next thought
           await whatsappService.sendTypingIndicator(userId, contact.phone);
-          const interDelay = 1200 + Math.random() * 1000;
+          const interDelay = 600 + Math.random() * 400;
           await this.sleep(interDelay);
         }
         await whatsappService.sendMessage(userId, contact.phone, parts[i]);
@@ -214,11 +214,11 @@ class ReplyWorker {
    * Jitter ensures no two replies feel robotic/identical.
    */
   private calculateTypingDelay(text: string): number {
-    const CHARS_PER_SECOND = 7; // casual WhatsApp typing speed
-    const base = (text.length / CHARS_PER_SECOND) * 1000;
-    const jitter = (Math.random() - 0.5) * 1500; // ±750ms
-    return Math.min(Math.max(base + jitter, 1500), 10000); // clamp: 1.5s–10s
-  }
+  const CHARS_PER_SECOND = 20;                          // faster typer
+  const base = (text.length / CHARS_PER_SECOND) * 1000;
+  const jitter = (Math.random() - 0.5) * 500;          // less variance
+  return Math.min(Math.max(base + jitter, 800), 2500);  // cap at 2.5s
+}
 
 
   /**
