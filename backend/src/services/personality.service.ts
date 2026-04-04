@@ -8,7 +8,7 @@ import {
   selectRepresentativeMessages
 } from '../utils/chatParser';
 import { detectDominantLanguages } from '../utils/language';
-import { groq, GROQ_MODELS } from '../config/groq'; // ← NEW IMPORT
+import { groq, GROQ_MODELS } from '../config/groq';
 
 
 interface RawMessage {
@@ -21,8 +21,10 @@ interface RawMessage {
 
 class PersonalityService {
 
+
   /**
    * Process uploaded chat file and build personality profile
+   * CHANGED: runs both style analyses in parallel, saves contactStyleSummary
    */
   async processChatExport(
     userId: string,
@@ -54,7 +56,7 @@ class PersonalityService {
 
       console.log('🧹 Cleaning messages...');
       const cleanedStudentMessages = cleanMessages(studentMessages);
-      const cleanedFamilyMessages = cleanMessages(familyMessages);
+      const cleanedFamilyMessages  = cleanMessages(familyMessages);
 
       console.log('🌐 Detecting languages...');
       const studentRawMessages = convertToRawMessages(
@@ -66,21 +68,28 @@ class PersonalityService {
         MessageSender.FAMILY
       );
 
-      const allTexts = studentRawMessages.map(msg => msg.text);
+      const allTexts          = studentRawMessages.map(msg => msg.text);
       const dominantLanguages = detectDominantLanguages(allTexts);
 
       console.log('🎯 Selecting representative messages...');
       const representativeMessages = selectRepresentativeMessages(studentRawMessages, 150);
 
-      // ── CHANGED: now async, calls Groq for compact style summary ─────────
-      console.log('🧠 Generating AI style summary...');
-      const systemPrompt = await this.buildPersonalityPrompt(
-        representativeMessages,
-        studentRawMessages,
-        familyRawMessages,
-        studentName,
-        dominantLanguages
-      );
+      // ✅ CHANGED: both Groq calls run in parallel — saves time
+      console.log('🧠 Generating AI style summaries (user + contact) in parallel...');
+      const [systemPrompt, contactStyleSummary] = await Promise.all([
+        this.buildPersonalityPrompt(
+          representativeMessages,
+          studentRawMessages,
+          familyRawMessages,
+          studentName,
+          dominantLanguages
+        ),
+        this.generateContactStyleSummary(
+          familyRawMessages,
+          studentName,
+          dominantLanguages
+        )
+      ]);
 
       console.log('💾 Saving personality profile...');
       await PersonalityProfile.findOneAndUpdate(
@@ -88,11 +97,12 @@ class PersonalityService {
         {
           userId,
           contactId,
-          rawMessages: [...studentRawMessages, ...familyRawMessages],
-          messageCount: studentRawMessages.length,
+          rawMessages:        [...studentRawMessages, ...familyRawMessages],
+          messageCount:       studentRawMessages.length,
           dominantLanguages,
           systemPrompt,
-          processedAt: new Date()
+          contactStyleSummary, // ✅ NEW
+          processedAt:        new Date()
         },
         { upsert: true, returnDocument: 'after' }
       );
@@ -126,16 +136,16 @@ class PersonalityService {
     lengthDescription: string;
   } {
     const substantive = messages.filter(m => m.text.length >= 10);
-    const sample = substantive.length > 0 ? substantive : messages;
+    const sample      = substantive.length > 0 ? substantive : messages;
 
     if (sample.length === 0) {
       return {
-        usesEmoji: false,
-        emojiFrequency: 'rarely',
-        usesPunctuation: false,
-        usesAbbreviations: false,
+        usesEmoji:          false,
+        emojiFrequency:     'rarely',
+        usesPunctuation:    false,
+        usesAbbreviations:  false,
         capitalizationStyle: 'mostly lowercase',
-        lengthDescription: 'short but complete thoughts'
+        lengthDescription:  'short but complete thoughts'
       };
     }
 
@@ -163,10 +173,10 @@ class PersonalityService {
       : 'tends to write more detailed replies, sometimes 2-3 sentences';
 
     return {
-      usesEmoji: emojiRatio > 0.1,
-      emojiFrequency: emojiRatio > 0.4 ? 'frequently (most messages)' : emojiRatio > 0.1 ? 'sometimes' : 'rarely or never',
-      usesPunctuation: punctuationRatio > 0.3,
-      usesAbbreviations: abbrRatio > 0.2,
+      usesEmoji:          emojiRatio > 0.1,
+      emojiFrequency:     emojiRatio > 0.4 ? 'frequently (most messages)' : emojiRatio > 0.1 ? 'sometimes' : 'rarely or never',
+      usesPunctuation:    punctuationRatio > 0.3,
+      usesAbbreviations:  abbrRatio > 0.2,
       capitalizationStyle: lowerRatio > 0.7 ? 'mostly lowercase' : 'mixed case',
       lengthDescription
     };
@@ -195,7 +205,7 @@ class PersonalityService {
 
     for (let i = 0; i < allMessages.length - 1; i++) {
       const current = allMessages[i];
-      const next = allMessages[i + 1];
+      const next    = allMessages[i + 1];
 
       if (
         current.isFamily &&
@@ -206,7 +216,7 @@ class PersonalityService {
         const timeDiff = new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime();
         if (timeDiff <= THIRTY_MINUTES) {
           pairs.push({
-            familySaid: current.text,
+            familySaid:     current.text,
             studentReplied: next.text
           });
         }
@@ -242,8 +252,10 @@ class PersonalityService {
 
 
   /**
-   * NEW: Call Groq to generate a compact 6-8 sentence style summary.
-   * Falls back to a plain text summary if Groq call fails.
+   * Call Groq to generate a compact 6-8 sentence style summary for the USER.
+   * Stored in: PersonalityProfile.systemPrompt
+   * Falls back to plain text summary if Groq call fails.
+   * UNCHANGED
    */
   private async generateStyleSummary(
     style: ReturnType<typeof this.analyzeStyle>,
@@ -275,21 +287,20 @@ ${pairsText}
 Write only the style description paragraph starting with "You text in..."`;
 
       const completion = await groq.chat.completions.create({
-        model: GROQ_MODELS.CHAT,
-        messages: [{ role: 'user', content: prompt }],
+        model:       GROQ_MODELS.CHAT,
+        messages:    [{ role: 'user', content: prompt }],
         temperature: 0.3,
-        max_tokens: 300,
+        max_tokens:  300,
       });
 
       const summary = completion.choices[0]?.message?.content?.trim();
       if (!summary) throw new Error('Empty summary from Groq');
 
-      console.log('✅ Style summary generated:', summary.substring(0, 80) + '...');
+      console.log('✅ User style summary generated:', summary.substring(0, 80) + '...');
       return summary;
 
     } catch (error: any) {
       console.error('⚠️ Style summary failed, using fallback:', error.message);
-      // Fallback: build description from analyzed data without Groq
       return [
         `You text in ${dominantLanguages.join(' and ')}.`,
         style.lengthDescription + '.',
@@ -307,8 +318,75 @@ Write only the style description paragraph starting with "You text in..."`;
 
 
   /**
-   * CHANGED: now async — generates compact AI style summary via Groq
-   * instead of building a long raw prompt with all messages.
+   * ✅ NEW: Call Groq to generate a 4-5 sentence style summary for the CONTACT (how THEY text).
+   * Stored in: PersonalityProfile.contactStyleSummary
+   * Tells the AI how to anticipate the contact's mood and communication style.
+   * Non-critical — if it fails, returns empty string silently.
+   */
+  private async generateContactStyleSummary(
+    familyMessages: RawMessage[],
+    studentName: string,
+    dominantLanguages: string[]
+  ): Promise<string> {
+    if (familyMessages.length < 5) {
+      return '';
+    }
+
+    try {
+      const contactStyle   = this.analyzeStyle(familyMessages);
+      const contactPhrases = this.extractCommonPhrases(familyMessages);
+
+      const sampleMessages = familyMessages
+        .filter(m => m.text.length >= 6)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 25)
+        .map(m => `"${m.text}"`)
+        .join('\n');
+
+      const prompt = `Analyze these WhatsApp messages sent by a person to their contact (${studentName}). Write a 4-5 sentence description of how THIS PERSON communicates. Focus on:
+- Their communication style (direct/indirect, emotional/calm, demanding/easygoing)
+- How they express when they need attention or are worried
+- Their typical message length and tone
+- Any recurring patterns (do they ask many questions? send multiple short messages? get emotional quickly?)
+- What kind of responses they seem to expect
+
+Write only the description — no headings, no bullet points. Write in third person starting with "This person texts..."
+
+Their style data:
+- Languages: ${dominantLanguages.join(', ')}
+- Message length: ${contactStyle.lengthDescription}
+- Emojis: ${contactStyle.emojiFrequency}
+- Capitalization: ${contactStyle.capitalizationStyle}
+${contactPhrases.length > 0 ? `- Phrases used often: ${contactPhrases.slice(0, 6).join(', ')}` : ''}
+
+Sample of their messages:
+${sampleMessages}
+
+Write only the description starting with "This person texts..."`;
+
+      const completion = await groq.chat.completions.create({
+        model:       GROQ_MODELS.CHAT,
+        messages:    [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens:  250,
+      });
+
+      const summary = completion.choices[0]?.message?.content?.trim();
+      if (!summary) throw new Error('Empty contact summary from Groq');
+
+      console.log('✅ Contact style summary generated:', summary.substring(0, 80) + '...');
+      return summary;
+
+    } catch (error: any) {
+      console.error('⚠️ Contact style summary failed — skipping (non-critical):', error.message);
+      return '';
+    }
+  }
+
+
+  /**
+   * Async — generates compact AI style summary via Groq for the USER.
+   * UNCHANGED
    */
   private async buildPersonalityPrompt(
     _representativeMessages: RawMessage[],
@@ -317,9 +395,9 @@ Write only the style description paragraph starting with "You text in..."`;
     studentName: string,
     dominantLanguages: string[]
   ): Promise<string> {
-    const style = this.analyzeStyle(allStudentMessages);
+    const style             = this.analyzeStyle(allStudentMessages);
     const conversationPairs = this.extractConversationPairs(allStudentMessages, familyMessages);
-    const commonPhrases = this.extractCommonPhrases(allStudentMessages);
+    const commonPhrases     = this.extractCommonPhrases(allStudentMessages);
 
     return await this.generateStyleSummary(
       style,
@@ -333,14 +411,15 @@ Write only the style description paragraph starting with "You text in..."`;
 
   /**
    * Get personality profile status
-   * CHANGED: added hasKnowledgeBase to return value
+   * CHANGED: added hasContactStyle to return value
    */
   async getProfileStatus(userId: string, contactId: string): Promise<{
     exists: boolean;
     messageCount?: number;
     dominantLanguages?: string[];
     processedAt?: Date;
-    hasKnowledgeBase?: boolean; // ← NEW
+    hasKnowledgeBase?: boolean;
+    hasContactStyle?: boolean; // ✅ NEW
   }> {
     const profile = await PersonalityProfile.findOne({ userId, contactId });
 
@@ -349,11 +428,12 @@ Write only the style description paragraph starting with "You text in..."`;
     }
 
     return {
-      exists: true,
-      messageCount: profile.messageCount,
+      exists:           true,
+      messageCount:     profile.messageCount,
       dominantLanguages: profile.dominantLanguages,
-      processedAt: profile.processedAt || undefined,
-      hasKnowledgeBase: !!((profile as any).knowledgeBase?.trim()) // ← NEW
+      processedAt:      profile.processedAt || undefined,
+      hasKnowledgeBase: !!((profile as any).knowledgeBase?.trim()),
+      hasContactStyle:  !!((profile as any).contactStyleSummary?.trim()) // ✅ NEW
     };
   }
 
@@ -368,7 +448,8 @@ Write only the style description paragraph starting with "You text in..."`;
 
 
   /**
-   * NEW: Save freeform knowledge base context for a contact
+   * Save freeform knowledge base context for a contact
+   * UNCHANGED
    */
   async saveKnowledgeBase(userId: string, contactId: string, knowledgeBase: string): Promise<void> {
     await PersonalityProfile.findOneAndUpdate(
@@ -380,12 +461,27 @@ Write only the style description paragraph starting with "You text in..."`;
 
 
   /**
-   * NEW: Get knowledge base for a contact
+   * Get knowledge base for a contact
+   * UNCHANGED
    */
   async getKnowledgeBase(userId: string, contactId: string): Promise<string> {
     const profile = await PersonalityProfile.findOne({ userId, contactId });
     return (profile as any)?.knowledgeBase || '';
   }
+
+
+  /**
+   * ✅ NEW: Save sensitive topics for a contact
+   * These are injected into the AI prompt as Rule C5 — topics to never bring up
+   */
+  async saveSensitiveTopics(userId: string, contactId: string, topics: string[]): Promise<void> {
+    await PersonalityProfile.findOneAndUpdate(
+      { userId, contactId },
+      { $set: { sensitiveTopics: topics } },
+      { upsert: true, new: true }
+    );
+  }
+
 }
 
 

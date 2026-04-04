@@ -108,7 +108,9 @@ export interface IPersonalityProfile extends Document {
   messageCount: number;
   dominantLanguages: string[];
   systemPrompt: string;
-  knowledgeBase?: string;    // ← ONLY NEW LINE
+  knowledgeBase?: string;
+  contactStyleSummary?: string;  // ✅ NEW
+  sensitiveTopics?: string[];    // ✅ NEW
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { IPersonalityProfile, MessageSender } from '../types';
 
+
 const RawMessageSchema = new Schema(
   {
     timestamp: {
@@ -23,6 +24,7 @@ const RawMessageSchema = new Schema(
   },
   { _id: false }
 );
+
 
 const PersonalityProfileSchema = new Schema<IPersonalityProfile>(
   {
@@ -56,9 +58,21 @@ const PersonalityProfileSchema = new Schema<IPersonalityProfile>(
       type: String,
       default: ''
     },
-    knowledgeBase: {          // ← ONLY NEW LINE
+    knowledgeBase: {
       type: String,
       default: ''
+    },
+    // ✅ NEW — AI-analyzed summary of how the CONTACT texts
+    // Generated during chat upload, used in buildSystemPrompt
+    contactStyleSummary: {
+      type: String,
+      default: ''
+    },
+    // ✅ NEW — Topics user wants AI to never bring up with this contact
+    // e.g. ['exams', 'money', 'ex-girlfriend']
+    sensitiveTopics: {
+      type: [String],
+      default: []
     }
   },
   {
@@ -66,10 +80,12 @@ const PersonalityProfileSchema = new Schema<IPersonalityProfile>(
   }
 );
 
+
 // Indexes
 PersonalityProfileSchema.index({ userId: 1 });
 PersonalityProfileSchema.index({ contactId: 1 });
 PersonalityProfileSchema.index({ userId: 1, contactId: 1 }, { unique: true });
+
 
 export const PersonalityProfile = mongoose.model<IPersonalityProfile>(
   'PersonalityProfile',

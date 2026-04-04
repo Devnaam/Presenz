@@ -181,6 +181,8 @@ class ReplyWorker {
         timestamp: new Date()
       });
 
+      groqService.summarizeAndSave(userId, contactId, contact.name).catch(() => {});
+
       // Step 13: Update incoming message status
       await Message.findByIdAndUpdate(messageId, {
         status: MessageStatus.REPLIED
