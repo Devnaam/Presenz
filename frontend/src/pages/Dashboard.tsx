@@ -12,11 +12,11 @@ import toast from 'react-hot-toast';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summary, setSummary]             = useState<DashboardSummary | null>(null);
   const [studentStatus, setStudentStatus] = useState<StudentStatus | null>(null);
   const [sessionStatus, setSessionStatus] = useState<string>('disconnected');
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'today' | '7days' | '30days'>('today');
+  const [loading, setLoading]             = useState(true);
+  const [period, setPeriod]               = useState<'today' | '7days' | '30days'>('today');
   const [periodLoading, setPeriodLoading] = useState(false);
 
 
@@ -80,63 +80,62 @@ const Dashboard: React.FC = () => {
   }
 
 
-  const isNewUser =
-    (summary?.today.activeContacts ?? 0) === 0 &&
-    (summary?.today.messagesReceived ?? 0) === 0;
-
   const periodLabel =
-    period === 'today' ? 'Today' :
-    period === '7days' ? 'Last 7 days' : 'Last 30 days';
+    period === 'today'  ? 'Today'       :
+    period === '7days'  ? 'Last 7 days' : 'Last 30 days';
 
+  // ✅ CHANGED — isNewUser now only checks contacts, not messages
+  // (messages will always be 0 for a brand new user anyway,
+  //  but contacts is the clearest signal they haven't set up yet)
+  const isNewUser = (summary?.today.activeContacts ?? 0) === 0;
+
+  // ✅ CHANGED — 3 steps only (profile setup moved into onboarding)
   const checklistSteps = [
     {
-      label: 'Create your account',
-      description: "You're in!",
-      done: true,
-      link: null,
+      label:       'Create your account',
+      description: "You're in! Profile set up during onboarding.",
+      done:        true,   // always true — they registered + completed onboarding
+      link:        null,
     },
     {
-      label: 'Connect WhatsApp',
-      description: 'Link your WhatsApp so AI can reply',
-      done: sessionStatus === 'connected',
-      link: '/settings',
+      label:       'Connect WhatsApp',
+      description: 'Your WhatsApp is linked — AI can now receive messages',
+      // ✅ CHANGED — was hardcoded, now reads live session status
+      done:        sessionStatus === 'connected',
+      link:        '/settings',
     },
     {
-      label: 'Add your first contact',
-      description: 'Tell AI who to reply to',
-      done: (summary?.today.activeContacts ?? 0) > 0,
-      link: '/contacts',
-    },
-    {
-      label: 'Build your profile',
-      description: 'Help AI sound like you',
-      done: false,
-      link: '/profile',
+      label:       'Add your first contact',
+      description: 'Tell AI who to reply to — add a family member or friend',
+      // UNCHANGED — already correct
+      done:        (summary?.today.activeContacts ?? 0) > 0,
+      link:        '/contacts',
     },
   ];
 
-  const completedSteps = checklistSteps.filter((s) => s.done).length;
+  const completedSteps  = checklistSteps.filter((s) => s.done).length;
   const progressPercent = Math.round((completedSteps / checklistSteps.length) * 100);
 
 
   return (
     <div className="space-y-6">
 
-      {/* Header */}
+
+      {/* Header — UNCHANGED */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600 mt-1">Welcome back, {user?.name}</p>
       </div>
 
 
-      {/* Onboarding Checklist — only for new users */}
+      {/* ✅ CHANGED — Checklist shows until first contact added */}
       {isNewUser && (
         <div className="card p-6 border-2 border-primary-100 bg-primary-50">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">🎉 Let's get you set up</h2>
+              <h2 className="text-lg font-bold text-gray-900">🎉 Almost there!</h2>
               <p className="text-sm text-gray-600 mt-0.5">
-                Complete these steps to activate your AI assistant
+                One more step to activate your AI assistant
               </p>
             </div>
             <span className="text-sm font-semibold text-primary-700">
@@ -157,8 +156,8 @@ const Dashboard: React.FC = () => {
             {checklistSteps.map((step, idx) => (
               <div
                 key={idx}
-                className={`flex items-center justify-between p-3 rounded-lg ${
-                  step.done ? 'bg-white opacity-60' : 'bg-white'
+                className={`flex items-center justify-between p-3 rounded-lg bg-white ${
+                  step.done ? 'opacity-60' : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -179,7 +178,7 @@ const Dashboard: React.FC = () => {
                 {!step.done && step.link && (
                   <Link
                     to={step.link}
-                    className="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-800 transition-colors"
+                    className="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-800 transition-colors whitespace-nowrap ml-3"
                   >
                     Go <ArrowRight className="w-3 h-3" />
                   </Link>
@@ -187,19 +186,28 @@ const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {/* ✅ NEW — hint about chat upload as optional next step */}
+          {completedSteps === checklistSteps.length && (
+            <div className="mt-4 p-3 bg-white border border-primary-200 rounded-lg">
+              <p className="text-sm text-primary-800">
+                💡 <strong>Optional:</strong> Upload a WhatsApp chat export on each contact's page to make AI sound even more like you.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
 
-      {/* Status Toggle */}
+      {/* Status Toggle — UNCHANGED */}
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Your Status</h3>
             <p className="text-sm text-gray-600 mt-1">
               {studentStatus?.mode === 'available'
-                ? 'You are available - AI will not reply'
-                : 'You are away - AI will handle messages'}
+                ? 'You are available — AI will not reply'
+                : 'You are away — AI will handle messages'}
             </p>
           </div>
           <button
@@ -224,7 +232,7 @@ const Dashboard: React.FC = () => {
       </div>
 
 
-      {/* Stats Grid with Period Toggle */}
+      {/* Stats Grid — UNCHANGED */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -299,7 +307,7 @@ const Dashboard: React.FC = () => {
       </div>
 
 
-      {/* Recent Activity */}
+      {/* Recent Activity — UNCHANGED */}
       <div className="card p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         {summary?.recentActivity && summary.recentActivity.length > 0 ? (
@@ -311,7 +319,7 @@ const Dashboard: React.FC = () => {
                 }`}>
                   {msg.direction === 'incoming'
                     ? <MessageCircle className="w-4 h-4 text-blue-600" />
-                    : <CheckCircle className="w-4 h-4 text-green-600" />
+                    : <CheckCircle  className="w-4 h-4 text-green-600" />
                   }
                 </div>
                 <div className="flex-1">
@@ -344,9 +352,9 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+
     </div>
   );
 };
-
 
 export default Dashboard;

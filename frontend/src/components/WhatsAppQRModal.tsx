@@ -105,7 +105,7 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
           {sessionStatus === 'pending_qr' && qrCode && (
             <>
               <img
-                src={`data:image/png;base64,${qrCode}`}
+                src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
                 alt="WhatsApp QR Code"
                 className="w-56 h-56 mx-auto border-4 border-gray-200 rounded-lg mb-4"
               />

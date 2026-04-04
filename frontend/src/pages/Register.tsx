@@ -43,6 +43,9 @@ const Register: React.FC = () => {
         formData.phone
       );
 
+      // ✅ ADD THIS — brand new user, must go through onboarding
+      localStorage.setItem('onboardingComplete', 'false');
+
       login(response.data.user, response.data.token);
       toast.success('Registration successful! Welcome to Presenz 🎉');
       navigate('/onboarding');
