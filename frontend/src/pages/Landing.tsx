@@ -11,9 +11,9 @@ const Landing: React.FC = () => {
         <div className="lp-container lp-nav-inner">
           <Link to="/" className="lp-nav-logo">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="Presenz logo">
-              <rect width="28" height="28" rx="8" fill="currentColor"/>
-              <path d="M7 14C7 14 9 9 14 9C19 9 21 14 21 14C21 14 19 19 14 19C9 19 7 14 7 14Z" stroke="white" strokeWidth="2" fill="none"/>
-              <circle cx="14" cy="14" r="3" fill="white"/>
+              <rect width="28" height="28" rx="8" fill="currentColor" />
+              <path d="M7 14C7 14 9 9 14 9C19 9 21 14 21 14C21 14 19 19 14 19C9 19 7 14 7 14Z" stroke="white" strokeWidth="2" fill="none" />
+              <circle cx="14" cy="14" r="3" fill="white" />
             </svg>
             Presenz
           </Link>
@@ -35,10 +35,10 @@ const Landing: React.FC = () => {
           <div className="lp-hero-inner">
             <div>
               <div className="lp-hero-tag">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="6"/></svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="6" /></svg>
                 AI WhatsApp Assistant
               </div>
-              <h1>Your AI replies<br/>while you <em>focus</em></h1>
+              <h1>Your AI replies<br />while you <em>focus</em></h1>
               <p className="lp-hero-sub">
                 Presenz keeps your family close even when you're busy.
                 AI replies to WhatsApp messages in your voice — casual, natural, just like you.
@@ -46,14 +46,14 @@ const Landing: React.FC = () => {
               <div className="lp-hero-actions">
                 <Link to="/register" className="lp-btn lp-btn-primary lp-btn-lg">
                   Start for free
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </Link>
                 <a href="#how-it-works" className="lp-btn lp-btn-secondary lp-btn-lg">See how it works</a>
               </div>
               <div className="lp-hero-trust">
-                <div style={{display:'flex'}}>
-                  {['R','A','P'].map((l,i) => (
-                    <div key={l} className="lp-trust-avatar" style={{marginLeft: i > 0 ? '-8px' : 0, background: ['#0d7a5f','#e67e22','#8e44ad'][i]}}>{l}</div>
+                <div style={{ display: 'flex' }}>
+                  {['R', 'A', 'P'].map((l, i) => (
+                    <div key={l} className="lp-trust-avatar" style={{ marginLeft: i > 0 ? '-8px' : 0, background: ['#0d7a5f', '#e67e22', '#8e44ad'][i] }}>{l}</div>
                   ))}
                 </div>
                 <p className="lp-hero-trust-text">Trusted by students &amp; professionals across India</p>
@@ -89,7 +89,7 @@ const Landing: React.FC = () => {
                       Haan ma kha liya 😊 exam tha thoda tough but theek tha. Aaj raat baat karte hain!
                       <div className="lp-msg-time">3:43 PM</div>
                       <div className="lp-ai-badge">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
                         AI replied
                       </div>
                     </div>
@@ -125,13 +125,13 @@ const Landing: React.FC = () => {
       <section className="lp-section" id="how-it-works">
         <div className="lp-container">
           <p className="lp-section-label">How it works</p>
-          <h2 className="lp-section-title">Set up in 3 steps,<br/>then forget about it</h2>
+          <h2 className="lp-section-title">Set up in 3 steps,<br />then forget about it</h2>
           <p className="lp-section-sub">Presenz works silently in the background — your family always gets a reply.</p>
           <div className="lp-steps-grid">
             {[
-              { n:'01', title:'Connect WhatsApp', desc:'Scan a QR code to link your account. Takes under 60 seconds — no app download, no number porting.' },
-              { n:'02', title:'Add contacts & build your profile', desc:'Tell Presenz who to reply to and write a short "about me." The more context, the more natural the AI sounds.' },
-              { n:'03', title:'Go Away, stay present', desc:'Switch to Away before a lecture or exam. AI handles every message in your voice until you\'re back.' },
+              { n: '01', title: 'Connect WhatsApp', desc: 'Scan a QR code to link your account. Takes under 60 seconds — no app download, no number porting.' },
+              { n: '02', title: 'Add contacts & build your profile', desc: 'Tell Presenz who to reply to and write a short "about me." The more context, the more natural the AI sounds.' },
+              { n: '03', title: 'Go Away, stay present', desc: 'Switch to Away before a lecture or exam. AI handles every message in your voice until you\'re back.' },
             ].map((s) => (
               <div key={s.n} className="lp-step-card">
                 <div className="lp-step-number">{s.n}</div>
@@ -147,12 +147,12 @@ const Landing: React.FC = () => {
       <section className="lp-features-section" id="features">
         <div className="lp-container">
           <p className="lp-section-label">Features</p>
-          <h2 className="lp-section-title">Everything your AI<br/>needs to sound like you</h2>
+          <h2 className="lp-section-title">Everything your AI<br />needs to sound like you</h2>
           <div className="lp-features-grid">
             <div className="lp-feature-card lp-feature-wide">
               <div>
                 <div className="lp-feature-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12l2 2 4-4" /><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" /></svg>
                 </div>
                 <h3 className="lp-feature-title">About Me — AI learns your style</h3>
                 <p className="lp-feature-desc">Write a few sentences about yourself. Presenz uses this to generate replies that genuinely sound like you, not a robot.</p>
@@ -164,10 +164,10 @@ const Landing: React.FC = () => {
             </div>
 
             {[
-              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, title:'Per-contact Knowledge Base', desc:'Write context for each contact — topics, inside jokes, their schedule. AI customises replies per relationship.' },
-              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>, title:'Hinglish natively supported', desc:'Auto-detect or pin to English, Hindi, Hinglish, or Tamil. AI code-switches just like you do.' },
-              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, title:'Auto-Away detection', desc:'After X minutes of inactivity, Presenz switches Away automatically — nothing slips even when you forget.' },
-              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, title:'Full activity log', desc:'See every AI reply — who it replied to, what it said, and when. Stay in control without being glued to your phone.' },
+              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>, title: 'Per-contact Knowledge Base', desc: 'Write context for each contact — topics, inside jokes, their schedule. AI customises replies per relationship.' },
+              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>, title: 'Hinglish natively supported', desc: 'Auto-detect or pin to English, Hindi, Hinglish, or Tamil. AI code-switches just like you do.' },
+              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, title: 'Auto-Away detection', desc: 'After X minutes of inactivity, Presenz switches Away automatically — nothing slips even when you forget.' },
+              { icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>, title: 'Full activity log', desc: 'See every AI reply — who it replied to, what it said, and when. Stay in control without being glued to your phone.' },
             ].map((f) => (
               <div key={f.title} className="lp-feature-card">
                 <div className="lp-feature-icon">{f.icon}</div>
@@ -183,18 +183,18 @@ const Landing: React.FC = () => {
       <section className="lp-section">
         <div className="lp-container">
           <p className="lp-section-label">Real users</p>
-          <h2 className="lp-section-title">They stopped worrying<br/>about missing messages</h2>
+          <h2 className="lp-section-title">They stopped worrying<br />about missing messages</h2>
           <div className="lp-testimonial-grid">
             {[
-              { stars:'★★★★★', text:'"My mom used to stress when I didn\'t reply during practicals. Now she gets a reply in 2 minutes that actually sounds like me. She had no idea it was AI for a week!"', name:'Rahul K.', role:'Engineering student, Pune', color:'#0d7a5f', initial:'R' },
-              { stars:'★★★★★', text:'"I work night shifts at a startup. Presenz handles my family\'s messages while I\'m heads-down. The Hinglish replies are spot on — tone, everything."', name:'Priya S.', role:'Software developer, Bangalore', color:'#8e44ad', initial:'P' },
-              { stars:'★★★★☆', text:'"The knowledge base feature is underrated. I wrote what my girlfriend and I usually talk about and the replies have been surprisingly good. Setup was under 5 mins."', name:'Arjun M.', role:'MBA student, Hyderabad', color:'#e67e22', initial:'A' },
+              { stars: '★★★★★', text: '"My mom used to stress when I didn\'t reply during practicals. Now she gets a reply in 2 minutes that actually sounds like me. She had no idea it was AI for a week!"', name: 'Rahul K.', role: 'Engineering student, Pune', color: '#0d7a5f', initial: 'R' },
+              { stars: '★★★★★', text: '"I work night shifts at a startup. Presenz handles my family\'s messages while I\'m heads-down. The Hinglish replies are spot on — tone, everything."', name: 'Priya S.', role: 'Software developer, Bangalore', color: '#8e44ad', initial: 'P' },
+              { stars: '★★★★☆', text: '"The knowledge base feature is underrated. I wrote what my girlfriend and I usually talk about and the replies have been surprisingly good. Setup was under 5 mins."', name: 'Arjun M.', role: 'MBA student, Hyderabad', color: '#e67e22', initial: 'A' },
             ].map((t) => (
               <div key={t.name} className="lp-testimonial-card">
                 <div className="lp-stars">{t.stars}</div>
                 <p className="lp-testimonial-text">{t.text}</p>
                 <div className="lp-testimonial-author">
-                  <div className="lp-testimonial-avatar" style={{background: t.color}}>{t.initial}</div>
+                  <div className="lp-testimonial-avatar" style={{ background: t.color }}>{t.initial}</div>
                   <div>
                     <p className="lp-testimonial-name">{t.name}</p>
                     <p className="lp-testimonial-role">{t.role}</p>
@@ -209,14 +209,14 @@ const Landing: React.FC = () => {
       {/* PRICING */}
       <section className="lp-pricing-section" id="pricing">
         <div className="lp-container">
-          <p className="lp-section-label" style={{textAlign:'center'}}>Pricing</p>
-          <h2 className="lp-section-title" style={{textAlign:'center'}}>Simple, honest pricing</h2>
-          <p className="lp-section-sub" style={{marginInline:'auto', textAlign:'center'}}>Start free. Upgrade when you need more.</p>
+          <p className="lp-section-label" style={{ textAlign: 'center' }}>Pricing</p>
+          <h2 className="lp-section-title" style={{ textAlign: 'center' }}>Simple, honest pricing</h2>
+          <p className="lp-section-sub" style={{ marginInline: 'auto', textAlign: 'center' }}>Start free. Upgrade when you need more.</p>
           <div className="lp-pricing-grid">
             {[
-              { plan:'Trial', price:'Free', period:'7 days, no card needed', featured:false, features:['2 protected contacts','50 AI replies / day','Hinglish + English','Basic knowledge base'], noFeatures:['Activity log','Priority support'] },
-              { plan:'Basic', price:'₹199', period:'per month', featured:true, features:['5 protected contacts','200 AI replies / day','All 4 languages','Full knowledge base','Activity log'], noFeatures:['Priority support'] },
-              { plan:'Pro', price:'₹499', period:'per month', featured:false, features:['Unlimited contacts','Unlimited AI replies','All 4 languages','Full knowledge base','Activity log','Priority support'], noFeatures:[] },
+              { plan: 'Trial', price: 'Free', period: '7 days, no card needed', featured: false, features: ['2 protected contacts', '50 AI replies / day', 'Hinglish + English', 'Basic knowledge base'], noFeatures: ['Activity log', 'Priority support'] },
+              { plan: 'Basic', price: '₹199', period: 'per month', featured: true, features: ['5 protected contacts', '200 AI replies / day', 'All 4 languages', 'Full knowledge base', 'Activity log'], noFeatures: ['Priority support'] },
+              { plan: 'Pro', price: '₹499', period: 'per month', featured: false, features: ['Unlimited contacts', 'Unlimited AI replies', 'All 4 languages', 'Full knowledge base', 'Activity log', 'Priority support'], noFeatures: [] },
             ].map((p) => (
               <div key={p.plan} className={`lp-pricing-card${p.featured ? ' lp-pricing-featured' : ''}`}>
                 {p.featured && <div className="lp-pricing-badge">Most popular</div>}
@@ -240,7 +240,7 @@ const Landing: React.FC = () => {
       <section className="lp-section">
         <div className="lp-container">
           <div className="lp-cta-box">
-            <h2 className="lp-cta-title">Stop missing messages.<br/>Start being present.</h2>
+            <h2 className="lp-cta-title">Stop missing messages.<br />Start being present.</h2>
             <p className="lp-cta-sub">Join students and professionals who let Presenz handle WhatsApp while they focus on what matters.</p>
             <div className="lp-cta-actions">
               <Link to="/register" className="lp-btn lp-btn-white lp-btn-lg">Get started free</Link>
