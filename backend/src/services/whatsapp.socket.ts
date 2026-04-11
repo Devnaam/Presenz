@@ -14,7 +14,7 @@ import {
   StudentStatus,
   Message,
   PersonalityProfile,
-  User,                   // ← added for Layer 2 phone validation
+  User,
 } from '../models';
 import { SessionStatus, MessageDirection, MessageType, MessageStatus } from '../types';
 import {
@@ -42,6 +42,12 @@ export const activeSockets = new Map() as Map<string, WASocket>;
 // Sessions currently attempting to reconnect (prevents double reconnect)
 const reconnectingSet = new Set<string>();
 
+// Initialization lock — prevents duplicate socket creation for same session
+const connectingMap = new Set<string>();
+
+// 440 retry counter per session — reserved for future exponential backoff use
+const reconnectAttempts = new Map<string, number>();
+
 // LID → phone number resolution map (per session)
 const lidMaps = new Map<string, Map<string, string>>();
 
@@ -58,7 +64,6 @@ class SocketManager {
 
 
   // ── Public: get active socket for a session ───────────────────
-  // Used by whatsapp.service.ts for sendMessage, markAsRead etc.
   getSocket(sessionId: string): WASocket | undefined {
     return activeSockets.get(sessionId);
   }
@@ -67,6 +72,12 @@ class SocketManager {
   // ── Load LID map from MongoDB into memory ─────────────────────
   async loadLidMapFromDB(sessionId: string): Promise<void> {
     try {
+      // Skip DB query if map already loaded in memory
+      if (lidMaps.has(sessionId)) {
+        console.log(`📂 [LID] Already in memory (${lidMaps.get(sessionId)!.size} mappings) — skipping DB query`);
+        return;
+      }
+
       const session = await WhatsAppSession.findOne({ sessionId });
       const storedMap = (session as any)?.lidMap;
 
@@ -133,8 +144,21 @@ class SocketManager {
   // ── Initialize Baileys socket ─────────────────────────────────
   async initializeSocket(sessionId: string, userId: string): Promise<void> {
     try {
-      // Load persisted LID map BEFORE connecting so buffered messages
-      // can be resolved immediately on the next contacts event
+      // Initialization lock — prevents duplicate socket creation
+      if (connectingMap.has(sessionId)) {
+        console.log(`⏳ [SOCKET] Already initializing: ${sessionId} — skipping duplicate call`);
+        return;
+      }
+      connectingMap.add(sessionId);
+
+      // Terminate any stale socket before creating new one
+      const staleSocket = activeSockets.get(sessionId);
+      if (staleSocket) {
+        try { staleSocket.end(undefined); } catch { }
+        activeSockets.delete(sessionId);
+      }
+
+      // Load persisted LID map BEFORE connecting
       await this.loadLidMapFromDB(sessionId);
 
       const { version } = await fetchLatestBaileysVersion();
@@ -175,11 +199,13 @@ class SocketManager {
             );
           }
 
-
           // ── Connection opened ────────────────────────────────
           if (connection === 'open') {
             await saveCreds();
             reconnectingSet.delete(sessionId);
+            // Release init lock + reset 440 counter on successful connect
+            connectingMap.delete(sessionId);
+            reconnectAttempts.delete(sessionId);
 
             // ══════════════════════════════════════════════════
             // LAYER 2 + 3: WhatsApp number ownership validation
@@ -211,6 +237,7 @@ class SocketManager {
                   );
                   try { await sock.logout(); } catch { }
                   activeSockets.delete(sessionId);
+                  connectingMap.delete(sessionId);
                   await WhatsAppSession.findOneAndUpdate(
                     { sessionId },
                     { status: SessionStatus.DISCONNECTED, qrCode: null }
@@ -222,7 +249,7 @@ class SocketManager {
                     description: `Phone mismatch — connected number did not match your registered phone`,
                     metadata: { connectedPhone: connectedNormalized, sessionId },
                   });
-                  return; // ← do NOT mark CONNECTED
+                  return;
                 }
                 console.log(`✅ [AUTH] Layer 2 passed — phone match confirmed`);
               }
@@ -234,8 +261,6 @@ class SocketManager {
                 status: SessionStatus.CONNECTED,
               });
 
-
-
               if (alreadyClaimed) {
                 console.error(
                   `🚫 [AUTH] WA number ${connectedNormalized} already active on ` +
@@ -243,11 +268,12 @@ class SocketManager {
                 );
                 try { await sock.logout(); } catch { }
                 activeSockets.delete(sessionId);
+                connectingMap.delete(sessionId);
                 await WhatsAppSession.findOneAndUpdate(
                   { sessionId },
                   { status: SessionStatus.DISCONNECTED, qrCode: null }
                 );
-                return; // ← do NOT mark CONNECTED
+                return;
               }
               console.log(`✅ [AUTH] Layer 3 passed — WA number not claimed by another account`);
               await activityService.log({
@@ -266,7 +292,7 @@ class SocketManager {
                   connectedAt: new Date(),
                   lastSeenAt: new Date(),
                   qrCode: null,
-                  connectedPhone: connectedNormalized,   // ← persisted for Layer 3 future lookups
+                  connectedPhone: connectedNormalized,
                 }
               );
 
@@ -294,36 +320,63 @@ class SocketManager {
             closedOnce = true;
 
             const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-            const isRestartRequired = statusCode === DisconnectReason.restartRequired;
+            const isLoggedOut          = statusCode === DisconnectReason.loggedOut;
+            const isRestartRequired    = statusCode === DisconnectReason.restartRequired;
+            const isConnectionReplaced = statusCode === 440;
 
             console.log(`❌ [SOCKET] Connection closed — session: ${sessionId}, code: ${statusCode}`);
             activeSockets.delete(sessionId);
+            // Always release init lock on close so session can be re-initialized
+            connectingMap.delete(sessionId);
 
+            // ── LOGGED OUT ────────────────────────────────────
             if (isLoggedOut) {
               reconnectingSet.delete(sessionId);
+              reconnectAttempts.delete(sessionId);
               lidMaps.delete(sessionId);
               pendingLidMessages.delete(sessionId);
               await WhatsAppSession.findOneAndUpdate(
                 { sessionId },
                 { status: SessionStatus.DISCONNECTED }
               );
-
               await activityService.log({
-              userId,
-              type: 'whatsapp.disconnected',
-              title: 'WhatsApp Disconnected',
-              description: `WhatsApp session was disconnected`,
-              metadata: { sessionId, reason: 'logged_out' },
-            });
+                userId,
+                type: 'whatsapp.disconnected',
+                title: 'WhatsApp Disconnected',
+                description: 'Session was logged out',
+                metadata: { sessionId, reason: 'logged_out' },
+              });
               console.log(`🚪 [SOCKET] Session logged out: ${sessionId}`);
               return;
             }
-            
 
+            // ── CONNECTION REPLACED (440) ─────────────────────
+            // Another device/browser took over this account.
+            // DO NOT reconnect — that starts an infinite war.
+            // Mark disconnected — user must close WA Web and reconnect manually.
+            if (isConnectionReplaced) {
+              reconnectingSet.delete(sessionId);
+              reconnectAttempts.delete(sessionId);
+              await WhatsAppSession.findOneAndUpdate(
+                { sessionId },
+                { status: SessionStatus.DISCONNECTED, qrCode: null }
+              );
+              await activityService.log({
+                userId,
+                type: 'whatsapp.rejected',        // ← valid ActivityEventType
+                title: 'Session Replaced',
+                description: 'Another device connected to your WhatsApp. Close WhatsApp Web and reconnect from Presenz.',
+                metadata: { sessionId, reason: 'connection_replaced_440' },
+              });
+              console.log(`⚔️  [SOCKET] Code 440 — NOT reconnecting. User must close WhatsApp Web and reconnect manually.`);
+              return;  // ← CRITICAL — no reconnect attempt
+            }
+
+            // ── PREVENT DOUBLE RECONNECT ──────────────────────
             if (reconnectingSet.has(sessionId)) return;
             reconnectingSet.add(sessionId);
 
+            // ── RESTART REQUIRED ──────────────────────────────
             if (isRestartRequired) {
               console.log(`💾 [SOCKET] Saving credentials before restart...`);
               await saveCreds();
@@ -334,14 +387,17 @@ class SocketManager {
                   await this.initializeSocket(sessionId, userId);
                 }
               }, 3000);
-            } else {
-              setTimeout(async () => {
-                reconnectingSet.delete(sessionId);
-                if (!activeSockets.has(sessionId)) {
-                  await this.initializeSocket(sessionId, userId);
-                }
-              }, 8000);
+              return;
             }
+
+            // ── ALL OTHER ERRORS — reconnect with backoff ─────
+            console.log(`⚠️  [SOCKET] Unknown disconnect (code: ${statusCode}) — retrying in 8s`);
+            setTimeout(async () => {
+              reconnectingSet.delete(sessionId);
+              if (!activeSockets.has(sessionId)) {
+                await this.initializeSocket(sessionId, userId);
+              }
+            }, 8000);
           }
 
         } catch (error) {
@@ -391,9 +447,9 @@ class SocketManager {
       //
       // WhatsApp only sends the full contact list ONCE (on first QR scan).
       // On session restores, it never re-sends them. So we:
-      //   1. Persist the LID map to MongoDB after first successful load
-      //   2. Load from MongoDB on every restart (done above before connect)
-      //   3. Still listen to all 4 events in case they do fire (new contacts)
+      // 1. Persist the LID map to MongoDB after first successful load
+      // 2. Load from MongoDB on every restart (done above before connect)
+      // 3. Still listen to all 4 events in case they do fire (new contacts)
       // ─────────────────────────────────────────────────────────
 
       const processContacts = async (contacts: any[], source: string) => {
@@ -486,6 +542,8 @@ class SocketManager {
       });
 
     } catch (error) {
+      // Release lock on any initialization failure
+      connectingMap.delete(sessionId);
       console.error('Error initializing socket:', error);
       throw error;
     }
@@ -717,7 +775,8 @@ class SocketManager {
 
     console.log(`✅ [REPLY] Gate 1 passed — student is away`);
 
-    // Gate 2: Does personality profile exist?
+    // Gate 2: Does personality profile exist WITH a knowledge base?
+    // knowledgeBase (Step 2) is REQUIRED. systemPrompt (Step 3) is optional.
     const profile = await PersonalityProfile.findOne({ userId, contactId });
     console.log(`🧠 [REPLY] Profile: ${profile ? `found (id: ${profile._id})` : 'NOT FOUND'}`);
 
@@ -726,12 +785,17 @@ class SocketManager {
       return;
     }
 
-    if (!profile.systemPrompt) {
-      console.log(`⏭️ [REPLY] BLOCKED — systemPrompt is empty`);
+    if (!(profile as any).knowledgeBase?.trim()) {
+      console.log(`⏭️ [REPLY] BLOCKED — knowledge base is empty (Step 2 not completed)`);
       return;
     }
 
-    console.log(`✅ [REPLY] Gate 2 passed — personality profile ready`);
+    console.log(`✅ [REPLY] Gate 2 passed — knowledge base present`);
+    if (profile.systemPrompt?.trim()) {
+      console.log(`✅ [REPLY] Style summary also present (Step 3 was completed)`);
+    } else {
+      console.log(`ℹ️  [REPLY] No style summary — will reply using knowledge base only (Step 3 skipped)`);
+    }
 
     const job = await replyQueue.add('generate-reply', {
       userId,
@@ -757,8 +821,9 @@ class SocketManager {
 
     const profile = await PersonalityProfile.findOne({ userId, contactId });
 
-    if (!profile || !profile.systemPrompt) {
-      console.log(`⚠️ [VOICE] No personality profile — saving but not processing`);
+    // Gate on knowledgeBase (same as checkAndQueueReply for consistency)
+    if (!profile || !(profile as any).knowledgeBase?.trim()) {
+      console.log(`⚠️ [VOICE] No personality profile / knowledge base — saving but not processing`);
       return false;
     }
 

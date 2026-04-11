@@ -202,15 +202,37 @@ class WhatsAppService {
 
       console.log(`🔄 Restoring ${connectedSessions.length} sessions...`);
 
-      for (const session of connectedSessions) {
-        try {
-          await socketManager.initializeSocket(
-            session.sessionId,
-            session.userId.toString()
-          );
-          await delay(2000);
-        } catch (error) {
-          console.error(`Failed to restore session: ${session.sessionId}`, error);
+      const BATCH_SIZE = 5;         // connect 5 sessions at a time
+      const SESSION_DELAY = 2000;   // 2s gap between sessions in a batch
+      const BATCH_DELAY = 10000;   // 10s gap between batches
+
+      for (let i = 0; i < connectedSessions.length; i += BATCH_SIZE) {
+        const batch = connectedSessions.slice(i, i + BATCH_SIZE);
+
+        for (const session of batch) {
+          // ── Guard: skip corrupt sessions with null userId ────────
+          if (!session.userId || !session.sessionId) {
+            console.warn(`⚠️ [RESTORE] Skipping corrupt session (null userId): ${session._id}`);
+            continue;
+          }
+
+          try {
+            await socketManager.initializeSocket(
+              session.sessionId,
+              session.userId.toString()
+            );
+            await delay(SESSION_DELAY);
+          } catch (error) {
+            console.error(`Failed to restore session: ${session.sessionId}`, error);
+          }
+        }
+
+        // Wait between batches (except after the last batch)
+        if (i + BATCH_SIZE < connectedSessions.length) {
+          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          const totalBatches = Math.ceil(connectedSessions.length / BATCH_SIZE);
+          console.log(`⏸️ [RESTORE] Batch ${batchNum}/${totalBatches} done — waiting ${BATCH_DELAY / 1000}s...`);
+          await delay(BATCH_DELAY);
         }
       }
 

@@ -244,6 +244,8 @@ class ReplyWorker {
 
   /**
    * Validate all reply conditions
+   * CHANGED: gates on knowledgeBase (Step 2), not systemPrompt (Step 3).
+   * Step 3 (chat upload) is optional — AI can reply with knowledge base alone.
    */
   private async validateReplyConditions(userId: string, contactId: string): Promise<boolean> {
     const canUseAI = await subscriptionService.canUseAI(userId);
@@ -265,9 +267,17 @@ class ReplyWorker {
     }
 
     const profile = await PersonalityProfile.findOne({ userId, contactId });
-    if (!profile || !profile.systemPrompt) {
-      console.log('❌ No personality profile found');
+
+    // ── CHANGED: gate on knowledgeBase (Step 2), NOT systemPrompt (Step 3) ──
+    // Step 3 (chat upload → systemPrompt) is optional.
+    // Step 2 (knowledge base) is the minimum required for AI to reply.
+    if (!profile || !(profile as any).knowledgeBase?.trim()) {
+      console.log('❌ No knowledge base found — Step 2 is required before AI can reply');
       return false;
+    }
+
+    if (!profile.systemPrompt?.trim()) {
+      console.log('ℹ️  [WORKER] No style summary (Step 3 skipped) — replying with knowledge base only');
     }
 
     return true;
