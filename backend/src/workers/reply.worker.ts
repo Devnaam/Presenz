@@ -181,7 +181,10 @@ class ReplyWorker {
         timestamp: new Date()
       });
 
-      groqService.summarizeAndSave(userId, contactId, contact.name).catch(() => {});
+      await subscriptionService.incrementReplyCount(userId);
+      console.log(`📊 [LIMIT] Reply count incremented for user: ${userId}`);
+
+      groqService.summarizeAndSave(userId, contactId, contact.name).catch(() => { });
 
       // Step 13: Update incoming message status
       await Message.findByIdAndUpdate(messageId, {
@@ -199,7 +202,7 @@ class ReplyWorker {
         if (contact) {
           await whatsappService.stopTypingIndicator(userId, contact.phone);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       await Message.findByIdAndUpdate(messageId, {
         status: MessageStatus.FAILED
@@ -216,11 +219,11 @@ class ReplyWorker {
    * Jitter ensures no two replies feel robotic/identical.
    */
   private calculateTypingDelay(text: string): number {
-  const CHARS_PER_SECOND = 20;                          // faster typer
-  const base = (text.length / CHARS_PER_SECOND) * 1000;
-  const jitter = (Math.random() - 0.5) * 500;          // less variance
-  return Math.min(Math.max(base + jitter, 800), 2500);  // cap at 2.5s
-}
+    const CHARS_PER_SECOND = 20;                          // faster typer
+    const base = (text.length / CHARS_PER_SECOND) * 1000;
+    const jitter = (Math.random() - 0.5) * 500;          // less variance
+    return Math.min(Math.max(base + jitter, 800), 2500);  // cap at 2.5s
+  }
 
 
   /**

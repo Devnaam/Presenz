@@ -35,7 +35,7 @@ const Profile: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [savingBasic, setSavingBasic] = useState(false);
     const [savingAI, setSavingAI] = useState(false);
-    const [enhancing, setEnhancing] = useState(false); {/* ✅ added */}
+    const [enhancing, setEnhancing] = useState(false);
 
 
     const [passwordForm, setPasswordForm] = useState({
@@ -62,7 +62,7 @@ const Profile: React.FC = () => {
     });
 
 
-
+// eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         loadProfile();
     }, []);
@@ -126,7 +126,7 @@ const Profile: React.FC = () => {
     };
 
 
-    {/* ✅ added — same pattern as Contacts.tsx */}
+
     const handleEnhanceAboutMe = async () => {
         if (!aiForm.aboutMe.trim() || aiForm.aboutMe.trim().length < 10) {
             toast.error('Write at least a sentence first, then enhance');

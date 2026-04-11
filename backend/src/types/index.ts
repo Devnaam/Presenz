@@ -1,72 +1,136 @@
 import { Document, Types } from 'mongoose';
 
 
-// Enums
+// ─────────────────────────────────────────────────────────────────
+// Subscription Enums — updated
+// ─────────────────────────────────────────────────────────────────
+
 export enum SubscriptionStatus {
-  TRIAL = 'trial',
-  ACTIVE = 'active',
-  EXPIRED = 'expired'
+  PENDING   = 'pending',    // registered, trial NOT yet activated
+  TRIAL     = 'trial',      // trial activated, within 7 days
+  ACTIVE    = 'active',     // paid plan active
+  EXPIRED   = 'expired',    // trial over or paid plan lapsed
+  GRACE     = 'grace',      // payment failed, 3-day grace window
+  CANCELLED = 'cancelled',  // cancelled but stays active till period end
 }
 
+export enum SubscriptionPlan {
+  TRIAL    = 'trial',
+  PRO      = 'pro',
+  BUSINESS = 'business',   // replaces old BASIC
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// All other enums — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 
 export enum SessionStatus {
-  PENDING_QR = 'pending_qr',
-  CONNECTED = 'connected',
-  DISCONNECTED = 'disconnected'
+  PENDING_QR   = 'pending_qr',
+  CONNECTED    = 'connected',
+  DISCONNECTED = 'disconnected',
 }
-
 
 export enum MessageDirection {
   INCOMING = 'incoming',
-  OUTGOING = 'outgoing'
+  OUTGOING = 'outgoing',
 }
-
 
 export enum MessageType {
-  TEXT = 'text',
-  VOICE_NOTE = 'voice_note'
+  TEXT       = 'text',
+  VOICE_NOTE = 'voice_note',
 }
-
 
 export enum MessageStatus {
   RECEIVED = 'received',
-  REPLIED = 'replied',
-  PENDING = 'pending',
-  FAILED = 'failed'
+  REPLIED  = 'replied',
+  PENDING  = 'pending',
+  FAILED   = 'failed',
 }
-
 
 export enum StudentMode {
   AVAILABLE = 'available',
-  AWAY = 'away'
+  AWAY      = 'away',
 }
-
 
 export enum MessageSender {
   STUDENT = 'student',
-  FAMILY = 'family'
+  FAMILY  = 'family',
+}
+
+export enum AILanguage {
+  AUTO     = 'auto',
+  ENGLISH  = 'english',
+  HINDI    = 'hindi',
+  HINGLISH = 'hinglish',
+  TAMIL    = 'tamil',
+}
+
+export enum AITone {
+  CASUAL       = 'casual',
+  FRIENDLY     = 'friendly',
+  PROFESSIONAL = 'professional',
+}
+
+export enum AILength {
+  SHORT  = 'short',
+  MEDIUM = 'medium',
+  MATCH  = 'match',
 }
 
 
-export enum SubscriptionPlan {
-  TRIAL = 'trial',
-  BASIC = 'basic',
-  PRO = 'pro'
-}
+// ─────────────────────────────────────────────────────────────────
+// IUser — updated with subscription + referral + usage fields
+// ─────────────────────────────────────────────────────────────────
 
-
-// Interfaces
 export interface IUser extends Document {
   name: string;
   email: string;
   passwordHash: string;
   phone: string;
+
+  // Subscription
   subscriptionStatus: SubscriptionStatus;
-  trialEndsAt: Date;
+  plan: SubscriptionPlan;
+  trialActivatedAt: Date | null;   // null until user clicks "Activate Trial"
+  trialEndsAt: Date | null;        // set only when trial is activated
+
+  // Daily reply usage counter
+  repliesUsedToday: number;
+  repliesResetAt: Date;            // when counter was last reset (midnight)
+
+  // Referral system
+  referralCode: string;            // auto-generated on register, unique
+  referredBy: string | null;       // referral code entered at registration
+  bonusDays: number;               // extra days earned via referrals
+
   createdAt: Date;
   updatedAt: Date;
 }
 
+
+// ─────────────────────────────────────────────────────────────────
+// ISubscription — updated with cancellation + grace fields
+// ─────────────────────────────────────────────────────────────────
+
+export interface ISubscription extends Document {
+  userId: Types.ObjectId;
+  plan: SubscriptionPlan;
+  razorpaySubscriptionId?: string;
+  razorpayCustomerId?: string;
+  status: SubscriptionStatus;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  cancelledAt: Date | null;        // when user cancelled
+  gracePeriodEndsAt: Date | null;  // for failed payments, 3-day window
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// All other interfaces — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 
 export interface IWhatsAppSession extends Document {
   userId: Types.ObjectId;
@@ -80,7 +144,6 @@ export interface IWhatsAppSession extends Document {
   updatedAt: Date;
 }
 
-
 export interface IFamilyContact extends Document {
   userId: Types.ObjectId;
   name: string;
@@ -91,14 +154,12 @@ export interface IFamilyContact extends Document {
   updatedAt: Date;
 }
 
-
 export interface IRawMessage {
   timestamp: Date;
   sender: MessageSender;
   text: string;
   language: string;
 }
-
 
 export interface IPersonalityProfile extends Document {
   userId: Types.ObjectId;
@@ -109,12 +170,11 @@ export interface IPersonalityProfile extends Document {
   dominantLanguages: string[];
   systemPrompt: string;
   knowledgeBase?: string;
-  contactStyleSummary?: string;  // ✅ NEW
-  sensitiveTopics?: string[];    // ✅ NEW
+  contactStyleSummary?: string;
+  sensitiveTopics?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
-
 
 export interface IStudentStatus extends Document {
   userId: Types.ObjectId;
@@ -125,7 +185,6 @@ export interface IStudentStatus extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-
 
 export interface IMessage extends Document {
   userId: Types.ObjectId;
@@ -143,42 +202,6 @@ export interface IMessage extends Document {
   timestamp: Date;
   createdAt: Date;
   updatedAt: Date;
-}
-
-
-export interface ISubscription extends Document {
-  userId: Types.ObjectId;
-  plan: SubscriptionPlan;
-  razorpaySubscriptionId?: string;
-  razorpayCustomerId?: string;
-  status: SubscriptionStatus;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-
-// ADD at the bottom of types/index.ts
-
-export enum AILanguage {
-  AUTO = 'auto',
-  ENGLISH = 'english',
-  HINDI = 'hindi',
-  HINGLISH = 'hinglish',
-  TAMIL = 'tamil',
-}
-
-export enum AITone {
-  CASUAL = 'casual',
-  FRIENDLY = 'friendly',
-  PROFESSIONAL = 'professional',
-}
-
-export enum AILength {
-  SHORT = 'short',
-  MEDIUM = 'medium',
-  MATCH = 'match',
 }
 
 export interface IUserProfile extends Document {

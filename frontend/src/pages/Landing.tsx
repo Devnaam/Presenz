@@ -276,8 +276,8 @@ const Landing: React.FC = () => {
             <div>
               <p className="lp-footer-col-title">Legal</p>
               <ul className="lp-footer-links">
-                <li><a href="#">Privacy Policy</a></li>
-                <li><a href="#">Terms of Service</a></li>
+                <li><button type="button" className="lp-footer-link-btn">Privacy Policy</button></li>
+                <li><button type="button" className="lp-footer-link-btn">Terms of Service</button></li>
               </ul>
             </div>
           </div>

@@ -1,11 +1,31 @@
+// ─────────────────────────────────────────────────────────────────
+// User — updated with subscription, usage, referral fields
+// ─────────────────────────────────────────────────────────────────
 export interface User {
   _id: string;
   name: string;
   email: string;
   phone: string;
-  subscriptionStatus: 'trial' | 'active' | 'expired';
-  trialEndsAt: string;
+
+  // Subscription
+  subscriptionStatus: 'pending' | 'trial' | 'active' | 'expired' | 'grace' | 'cancelled';
+  plan: 'trial' | 'pro' | 'business';
+  trialActivatedAt: string | null;
+  trialEndsAt: string | null;
+
+  // Usage
+  repliesUsedToday: number;
+
+  // Referral
+  referralCode: string;
+  referredBy: string | null;
+  bonusDays: number;
 }
+
+
+// ─────────────────────────────────────────────────────────────────
+// All other interfaces — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 
 export interface FamilyContact {
   _id: string;

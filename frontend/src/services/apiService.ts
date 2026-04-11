@@ -1,7 +1,9 @@
 import api from './api';
 
 
+// ─────────────────────────────────────────────────────────────────
 // Auth APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const authService = {
   login: async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
@@ -24,7 +26,9 @@ export const authService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
 // Session APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const sessionService = {
   createSession: async (userId: string) => {
     const response = await api.post('/session/create', { userId });
@@ -45,7 +49,9 @@ export const sessionService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
 // Personality APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const personalityService = {
   uploadChat: async (userId: string, contactId: string, studentName: string, file: File) => {
     const formData = new FormData();
@@ -81,7 +87,9 @@ export const personalityService = {
 };
 
 
-// Contact APIs — CHANGED: update method added
+// ─────────────────────────────────────────────────────────────────
+// Contact APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const contactService = {
   getAll: async (userId: string) => {
     const response = await api.get(`/contacts?userId=${userId}`);
@@ -91,7 +99,6 @@ export const contactService = {
     const response = await api.post('/contacts', { userId, name, phone, relation });
     return response.data;
   },
-  // NEW
   update: async (contactId: string, name: string, phone: string, relation: string) => {
     const response = await api.patch(`/contacts/${contactId}`, { name, phone, relation });
     return response.data;
@@ -107,7 +114,9 @@ export const contactService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
 // Status APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const statusService = {
   get: async (userId: string) => {
     const response = await api.get(`/status?userId=${userId}`);
@@ -128,7 +137,9 @@ export const statusService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
 // Conversation APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const conversationService = {
   getAll: async (userId: string) => {
     const response = await api.get(`/conversations?userId=${userId}`);
@@ -149,7 +160,9 @@ export const conversationService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
 // Dashboard APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const dashboardService = {
   getSummary: async (userId: string, period: 'today' | '7days' | '30days' = 'today') => {
     const response = await api.get(`/dashboard/summary?userId=${userId}&period=${period}`);
@@ -158,35 +171,64 @@ export const dashboardService = {
 };
 
 
-// Subscription APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
+// Subscription APIs — UPDATED
+// Method renames: get → getSubscription, cancel → cancelSubscription
+// Plan type: 'basic' | 'pro' → 'pro' | 'business'
+// New methods: activateTrial, getSubscription, cancelSubscription
+// ─────────────────────────────────────────────────────────────────
 export const subscriptionService = {
-  get: async (userId: string) => {
+
+  // GET /api/v1/subscription?userId=...
+  getSubscription: async (userId: string) => {
     const response = await api.get(`/subscription?userId=${userId}`);
     return response.data;
   },
-  createOrder: async (userId: string, plan: 'basic' | 'pro') => {
+
+  // POST /api/v1/subscription/activate-trial
+  activateTrial: async (userId: string, referralCode?: string) => {
+    const response = await api.post('/subscription/activate-trial', {
+      userId,
+      ...(referralCode ? { referralCode } : {}),
+    });
+    return response.data;
+  },
+
+  // POST /api/v1/subscription/create-order
+  createOrder: async (userId: string, plan: 'pro' | 'business') => {
     const response = await api.post('/subscription/create-order', { userId, plan });
     return response.data;
   },
+
+  // POST /api/v1/subscription/verify-payment
   verifyPayment: async (
     userId: string,
     orderId: string,
     paymentId: string,
     signature: string,
-    plan: 'basic' | 'pro'
+    plan: 'pro' | 'business'
   ) => {
     const response = await api.post('/subscription/verify-payment', {
-      userId, orderId, paymentId, signature, plan,
+      userId,
+      orderId,
+      paymentId,
+      signature,
+      plan,
     });
     return response.data;
   },
-  cancel: async (userId: string) => {
+
+  // DELETE /api/v1/subscription/cancel
+  cancelSubscription: async (userId: string) => {
     const response = await api.delete('/subscription/cancel', { data: { userId } });
     return response.data;
   },
 };
 
 
+// ─────────────────────────────────────────────────────────────────
+// Profile APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const profileService = {
   getProfile: (userId: string) =>
     api.get(`/profile?userId=${userId}`),
@@ -204,6 +246,9 @@ export const profileService = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────
+// Activity APIs — UNCHANGED
+// ─────────────────────────────────────────────────────────────────
 export const activityService = {
   getLog: (userId: string, page = 1, filter = 'all') =>
     api.get(`/activity?userId=${userId}&page=${page}&filter=${filter}`),

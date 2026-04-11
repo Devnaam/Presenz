@@ -4,10 +4,11 @@ import { hashPassword, comparePassword, generateToken } from '../utils/auth';
 import { authenticate } from '../middleware/auth.middleware';
 import { registerValidation, loginValidation } from '../middleware/validation.middleware';
 import { StudentMode, SubscriptionStatus } from '../types';
-import bcrypt from 'bcryptjs'; // make sure this is already imported at the top
+import bcrypt from 'bcryptjs';
 
 
 const router = Router();
+
 
 /**
  * POST /api/v1/auth/register
@@ -17,10 +18,13 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
   try {
     const { name, email, password, phone } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // ── Normalize phone — strip spaces, dashes, leading + ────────
+    // Ensures "91 98765-43210" and "919876543210" are treated as same
+    const normalizedPhone = phone.replace(/[\s\-\+]/g, '');
 
-    if (existingUser) {
+    // ── Check email uniqueness ────────────────────────────────────
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
       res.status(400).json({
         success: false,
         message: 'Email already registered'
@@ -28,20 +32,31 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       return;
     }
 
-    // Hash password
+    // ── Check phone uniqueness ────────────────────────────────────
+    const existingPhone = await User.findOne({ phone: normalizedPhone });
+    if (existingPhone) {
+      res.status(400).json({
+        success: false,
+        message: 'This phone number is already registered. Please log in instead.'
+      });
+      return;
+    }
+
+    // ── Hash password ─────────────────────────────────────────────
     const passwordHash = await hashPassword(password);
 
-    // Create user
+    // ── Create user ───────────────────────────────────────────────
+    // subscriptionStatus starts as PENDING — trial is activated
+    // explicitly by the user later via activateTrial()
     const user = await User.create({
       name,
       email,
       passwordHash,
-      phone,
-      subscriptionStatus: SubscriptionStatus.TRIAL,
-      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      phone: normalizedPhone,
+      subscriptionStatus: SubscriptionStatus.PENDING,
     });
 
-    // Create default student status
+    // ── Create default student status ─────────────────────────────
     await StudentStatus.create({
       userId: user._id,
       mode: StudentMode.AVAILABLE,
@@ -50,7 +65,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       lastActiveAt: new Date(),
     });
 
-    // Generate token
+    // ── Generate token ────────────────────────────────────────────
     const token = generateToken(user._id.toString());
 
     res.status(201).json({
@@ -62,8 +77,14 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
           name: user.name,
           email: user.email,
           phone: user.phone,
-          subscriptionStatus: user.subscriptionStatus,
-          trialEndsAt: user.trialEndsAt,
+          subscriptionStatus: user.subscriptionStatus,   // 'pending'
+          plan: user.plan,                 // 'trial' (the plan tier, not status)
+          trialActivatedAt: user.trialActivatedAt,     // null
+          trialEndsAt: user.trialEndsAt,          // null
+          repliesUsedToday: user.repliesUsedToday,     // 0
+          referralCode: user.referralCode,         // 'X7KP2R'
+          referredBy: user.referredBy,           // null
+          bonusDays: user.bonusDays,            // 0
         },
         token,
       },
@@ -78,6 +99,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
   }
 });
 
+
 /**
  * POST /api/v1/auth/login
  * User login
@@ -86,9 +108,7 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Find user
     const user = await User.findOne({ email });
-
     if (!user) {
       res.status(401).json({
         success: false,
@@ -97,9 +117,7 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
       return;
     }
 
-    // Verify password
     const isValidPassword = await comparePassword(password, user.passwordHash);
-
     if (!isValidPassword) {
       res.status(401).json({
         success: false,
@@ -108,10 +126,8 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
       return;
     }
 
-    // Generate token
     const token = generateToken(user._id.toString());
 
-    // Update last active
     await StudentStatus.findOneAndUpdate(
       { userId: user._id },
       { lastActiveAt: new Date() },
@@ -127,8 +143,14 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
           name: user.name,
           email: user.email,
           phone: user.phone,
-          subscriptionStatus: user.subscriptionStatus,
-          trialEndsAt: user.trialEndsAt,
+          subscriptionStatus: user.subscriptionStatus,   // 'pending'
+          plan: user.plan,                 // 'trial' (the plan tier, not status)
+          trialActivatedAt: user.trialActivatedAt,     // null
+          trialEndsAt: user.trialEndsAt,          // null
+          repliesUsedToday: user.repliesUsedToday,     // 0
+          referralCode: user.referralCode,         // 'X7KP2R'
+          referredBy: user.referredBy,           // null
+          bonusDays: user.bonusDays,            // 0
         },
         token,
       },
@@ -143,6 +165,7 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
   }
 });
 
+
 /**
  * GET /api/v1/auth/me
  * Get current user info
@@ -150,12 +173,10 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
     const user = await User.findById(req.userId).select('-passwordHash');
-
     res.status(200).json({
       success: true,
       data: user
     });
-
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -163,6 +184,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     });
   }
 });
+
 
 /**
  * POST /api/v1/auth/logout
@@ -175,9 +197,9 @@ router.post('/logout', authenticate, async (_req: Request, res: Response) => {
   });
 });
 
+
 /**
  * PATCH /api/v1/auth/change-password
- * NEW
  */
 router.patch('/change-password', async (req: Request, res: Response) => {
   try {
@@ -213,7 +235,6 @@ router.patch('/change-password', async (req: Request, res: Response) => {
       return;
     }
 
-    // Verify current password
     const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isMatch) {
       res.status(401).json({
@@ -223,7 +244,6 @@ router.patch('/change-password', async (req: Request, res: Response) => {
       return;
     }
 
-    // Hash and save new password
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
     await user.save();
@@ -240,5 +260,6 @@ router.patch('/change-password', async (req: Request, res: Response) => {
     });
   }
 });
+
 
 export default router;

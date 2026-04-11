@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { activityService } from '../services/apiService';
 import {
   Zap, MessageCircle, RefreshCw, ChevronLeft,
-  ChevronRight, AlertCircle, UserCheck
+  ChevronRight, UserCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -45,17 +45,14 @@ const Activity: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(1);
-
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadStats();
   }, []);
-
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadLog(page, filter);
   }, [page, filter]);
-
 
   const loadStats = async () => {
     try {
@@ -187,11 +184,10 @@ const Activity: React.FC = () => {
           <button
             key={f.value}
             onClick={() => handleFilterChange(f.value)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              filter === f.value
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filter === f.value
                 ? 'bg-white text-primary-700 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             {f.label}
           </button>
@@ -221,9 +217,8 @@ const Activity: React.FC = () => {
                   <div className="flex items-start gap-3 flex-1 min-w-0">
 
                     {/* Icon */}
-                    <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${
-                      msg.studentOverride ? 'bg-yellow-100' : 'bg-primary-100'
-                    }`}>
+                    <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${msg.studentOverride ? 'bg-yellow-100' : 'bg-primary-100'
+                      }`}>
                       {msg.studentOverride
                         ? <UserCheck className="w-4 h-4 text-yellow-600" />
                         : <Zap className="w-4 h-4 text-primary-600" />

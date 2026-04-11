@@ -1,22 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { dashboardService, statusService, sessionService } from '../services/apiService';
 import { DashboardSummary, StudentStatus } from '../types';
 import {
   MessageCircle, Users, Zap, Clock, CheckCircle,
-  AlertCircle, CheckCircle2, Circle, ArrowRight
+  AlertCircle, CheckCircle2, Circle, ArrowRight, Gift
 } from 'lucide-react';
+
 import toast from 'react-hot-toast';
 
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [summary, setSummary]             = useState<DashboardSummary | null>(null);
+  const navigate = useNavigate();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [studentStatus, setStudentStatus] = useState<StudentStatus | null>(null);
   const [sessionStatus, setSessionStatus] = useState<string>('disconnected');
-  const [loading, setLoading]             = useState(true);
-  const [period, setPeriod]               = useState<'today' | '7days' | '30days'>('today');
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<'today' | '7days' | '30days'>('today');
   const [periodLoading, setPeriodLoading] = useState(false);
 
 
@@ -81,8 +83,8 @@ const Dashboard: React.FC = () => {
 
 
   const periodLabel =
-    period === 'today'  ? 'Today'       :
-    period === '7days'  ? 'Last 7 days' : 'Last 30 days';
+    period === 'today' ? 'Today' :
+      period === '7days' ? 'Last 7 days' : 'Last 30 days';
 
   // ✅ CHANGED — isNewUser now only checks contacts, not messages
   // (messages will always be 0 for a brand new user anyway,
@@ -92,28 +94,28 @@ const Dashboard: React.FC = () => {
   // ✅ CHANGED — 3 steps only (profile setup moved into onboarding)
   const checklistSteps = [
     {
-      label:       'Create your account',
+      label: 'Create your account',
       description: "You're in! Profile set up during onboarding.",
-      done:        true,   // always true — they registered + completed onboarding
-      link:        null,
+      done: true,   // always true — they registered + completed onboarding
+      link: null,
     },
     {
-      label:       'Connect WhatsApp',
+      label: 'Connect WhatsApp',
       description: 'Your WhatsApp is linked — AI can now receive messages',
       // ✅ CHANGED — was hardcoded, now reads live session status
-      done:        sessionStatus === 'connected',
-      link:        '/settings',
+      done: sessionStatus === 'connected',
+      link: '/settings',
     },
     {
-      label:       'Add your first contact',
+      label: 'Add your first contact',
       description: 'Tell AI who to reply to — add a family member or friend',
       // UNCHANGED — already correct
-      done:        (summary?.today.activeContacts ?? 0) > 0,
-      link:        '/contacts',
+      done: (summary?.today.activeContacts ?? 0) > 0,
+      link: '/contacts',
     },
   ];
 
-  const completedSteps  = checklistSteps.filter((s) => s.done).length;
+  const completedSteps = checklistSteps.filter((s) => s.done).length;
   const progressPercent = Math.round((completedSteps / checklistSteps.length) * 100);
 
 
@@ -126,6 +128,31 @@ const Dashboard: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600 mt-1">Welcome back, {user?.name}</p>
       </div>
+
+      {/* ── Trial activation banner — shown only when status is PENDING ── */}
+      {user?.subscriptionStatus === 'pending' && (
+        <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-r from-primary-50 to-green-50 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
+              <Gift className="w-5 h-5 text-primary-600" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-900 text-sm">
+                🎉 Your 7-day free trial is waiting!
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Activate now — no credit card required. AI replies start immediately.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/subscription')}
+            className="btn btn-primary text-sm whitespace-nowrap flex-shrink-0"
+          >
+            Activate Free Trial →
+          </button>
+        </div>
+      )}
 
 
       {/* ✅ CHANGED — Checklist shows until first contact added */}
@@ -156,9 +183,8 @@ const Dashboard: React.FC = () => {
             {checklistSteps.map((step, idx) => (
               <div
                 key={idx}
-                className={`flex items-center justify-between p-3 rounded-lg bg-white ${
-                  step.done ? 'opacity-60' : ''
-                }`}
+                className={`flex items-center justify-between p-3 rounded-lg bg-white ${step.done ? 'opacity-60' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   {step.done ? (
@@ -167,9 +193,8 @@ const Dashboard: React.FC = () => {
                     <Circle className="w-5 h-5 text-gray-300 flex-shrink-0" />
                   )}
                   <div>
-                    <p className={`text-sm font-medium ${
-                      step.done ? 'line-through text-gray-400' : 'text-gray-900'
-                    }`}>
+                    <p className={`text-sm font-medium ${step.done ? 'line-through text-gray-400' : 'text-gray-900'
+                      }`}>
                       {step.label}
                     </p>
                     <p className="text-xs text-gray-500">{step.description}</p>
@@ -212,13 +237,11 @@ const Dashboard: React.FC = () => {
           </div>
           <button
             onClick={toggleMode}
-            className={`relative inline-flex h-12 w-24 items-center rounded-full transition-colors ${
-              studentStatus?.mode === 'away' ? 'bg-primary-600' : 'bg-gray-300'
-            }`}
+            className={`relative inline-flex h-12 w-24 items-center rounded-full transition-colors ${studentStatus?.mode === 'away' ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
           >
-            <span className={`inline-block h-10 w-10 transform rounded-full bg-white shadow-lg transition-transform ${
-              studentStatus?.mode === 'away' ? 'translate-x-12' : 'translate-x-1'
-            }`} />
+            <span className={`inline-block h-10 w-10 transform rounded-full bg-white shadow-lg transition-transform ${studentStatus?.mode === 'away' ? 'translate-x-12' : 'translate-x-1'
+              }`} />
           </button>
         </div>
         {studentStatus?.autoAwayEnabled && (
@@ -246,11 +269,10 @@ const Dashboard: React.FC = () => {
               <button
                 key={p}
                 onClick={() => handlePeriodChange(p)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  period === p
-                    ? 'bg-white text-primary-700 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${period === p
+                  ? 'bg-white text-primary-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 {p === 'today' ? 'Today' : p === '7days' ? '7 Days' : '30 Days'}
               </button>
@@ -314,12 +336,11 @@ const Dashboard: React.FC = () => {
           <div className="space-y-3">
             {summary.recentActivity.map((msg: any) => (
               <div key={msg._id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                <div className={`p-2 rounded-lg ${
-                  msg.direction === 'incoming' ? 'bg-blue-100' : 'bg-green-100'
-                }`}>
+                <div className={`p-2 rounded-lg ${msg.direction === 'incoming' ? 'bg-blue-100' : 'bg-green-100'
+                  }`}>
                   {msg.direction === 'incoming'
                     ? <MessageCircle className="w-4 h-4 text-blue-600" />
-                    : <CheckCircle  className="w-4 h-4 text-green-600" />
+                    : <CheckCircle className="w-4 h-4 text-green-600" />
                   }
                 </div>
                 <div className="flex-1">

@@ -17,31 +17,46 @@ import Subscription from './pages/Subscription';
 import Profile from './pages/Profile';
 import Activity from './pages/Activity';
 import Landing from './pages/Landing';
+import Pricing from './pages/Pricing';   // ✅ NEW — public page
 
-// Root — Landing for guests, Dashboard for logged-in users
+
+// ─────────────────────────────────────────────────────────────────
+// LandingOrDashboard
+// Root route — shows Landing to guests, redirects logged-in users
+// ─────────────────────────────────────────────────────────────────
 const LandingOrDashboard: React.FC = () => {
   const { user } = useAuth();
   return user ? <Navigate to="/dashboard" replace /> : <Landing />;
 };
 
-// ✅ FIXED — reads localStorage directly (sync) instead of React state (async)
-// React state updates are batched and async — by the time OnboardingGuard renders
-// after navigate(), the state hasn't updated yet → always bounces back to /onboarding
-// localStorage.setItem() in Login.tsx runs synchronously BEFORE navigate() fires,
-// so this read is always accurate
+
+// ─────────────────────────────────────────────────────────────────
+// OnboardingGuard
+// Blocks access to dashboard-level routes until onboarding is done.
+// Reads localStorage directly (sync) — React state is async and
+// hasn't updated yet right after navigate() in Login.tsx
+// ─────────────────────────────────────────────────────────────────
 const OnboardingGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const flag = localStorage.getItem('onboardingComplete') === 'true';
   if (!flag) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 };
 
-// Guards /onboarding — if already done, skip straight to dashboard
+
+// ─────────────────────────────────────────────────────────────────
+// OnboardingRoute
+// Prevents users who already completed onboarding from re-entering
+// ─────────────────────────────────────────────────────────────────
 const OnboardingRoute: React.FC = () => {
   const flag = localStorage.getItem('onboardingComplete') === 'true';
   if (flag) return <Navigate to="/dashboard" replace />;
   return <Onboarding />;
 };
 
+
+// ─────────────────────────────────────────────────────────────────
+// App
+// ─────────────────────────────────────────────────────────────────
 function App() {
   return (
     <AuthProvider>
@@ -49,13 +64,15 @@ function App() {
         <Toaster position="top-right" />
         <Routes>
 
+          {/* ── Root ── */}
           <Route path="/" element={<LandingOrDashboard />} />
 
-          {/* Public */}
-          <Route path="/login"    element={<Login />} />
+          {/* ── Public ── */}
+          <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/pricing" element={<Pricing />} />  {/* ✅ NEW — no auth needed */}
 
-          {/* Onboarding */}
+          {/* ── Onboarding (auth required, onboarding guard NOT applied) ── */}
           <Route
             path="/onboarding"
             element={
@@ -65,29 +82,36 @@ function App() {
             }
           />
 
-          {/* Protected + Onboarding-gated */}
+          {/* ── Protected + Onboarding-gated routes ── */}
           <Route path="/dashboard" element={
             <ProtectedRoute><OnboardingGuard><Layout><Dashboard /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/conversations" element={
             <ProtectedRoute><OnboardingGuard><Layout><Conversations /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/contacts" element={
             <ProtectedRoute><OnboardingGuard><Layout><Contacts /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/settings" element={
             <ProtectedRoute><OnboardingGuard><Layout><Settings /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/subscription" element={
             <ProtectedRoute><OnboardingGuard><Layout><Subscription /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/profile" element={
             <ProtectedRoute><OnboardingGuard><Layout><Profile /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
+
           <Route path="/activity" element={
             <ProtectedRoute><OnboardingGuard><Layout><Activity /></Layout></OnboardingGuard></ProtectedRoute>
-          }/>
+          } />
 
+          {/* ── Fallback ── */}
           <Route path="*" element={<Navigate to="/" replace />} />
 
         </Routes>

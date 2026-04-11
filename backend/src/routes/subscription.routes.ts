@@ -6,10 +6,10 @@ import { verifyRazorpaySignature } from '../utils/payment';
 const router = Router();
 
 
-/**
- * GET /api/v1/subscription
- * Get current subscription details
- */
+// ─────────────────────────────────────────────────────────────────
+// GET /api/v1/subscription
+// Get current subscription + computed status for the frontend
+// ─────────────────────────────────────────────────────────────────
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.query;
@@ -19,26 +19,56 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const subscription = await subscriptionService.getSubscription(userId as string);
+    const data = await subscriptionService.getSubscription(userId as string);
 
-    res.status(200).json({
-      success: true,
-      data: subscription
-    });
+    res.status(200).json({ success: true, data });
 
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to get subscription'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to get subscription' });
   }
 });
 
 
-/**
- * POST /api/v1/subscription/create-order
- * Create Razorpay order for subscription
- */
+// ─────────────────────────────────────────────────────────────────
+// POST /api/v1/subscription/activate-trial
+// Called when user clicks "Activate My Free Trial"
+// Body: { userId, referralCode? }
+// ─────────────────────────────────────────────────────────────────
+router.post('/activate-trial', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId, referralCode } = req.body;
+
+    if (!userId) {
+      res.status(400).json({ success: false, message: 'userId is required' });
+      return;
+    }
+
+    const result = await subscriptionService.activateTrial(userId, referralCode);
+
+    res.status(200).json({
+      success: true,
+      message: 'Free trial activated! Enjoy 7 days of Presenz.',
+      data: result,
+    });
+
+  } catch (error: any) {
+    console.error('Activate trial error:', error);
+
+    // Friendly message for double-activation attempts
+    const message = error.message?.includes('already activated')
+      ? 'Trial is already active on your account'
+      : error.message || 'Failed to activate trial';
+
+    res.status(400).json({ success: false, message });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────────
+// POST /api/v1/subscription/create-order
+// Creates a Razorpay order for Pro or Business plan
+// Body: { userId, plan: 'pro' | 'business' }
+// ─────────────────────────────────────────────────────────────────
 router.post('/create-order', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, plan } = req.body;
@@ -48,8 +78,8 @@ router.post('/create-order', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (plan !== 'basic' && plan !== 'pro') {
-      res.status(400).json({ success: false, message: 'Invalid plan. Use "basic" or "pro"' });
+    if (plan !== 'pro' && plan !== 'business') {
+      res.status(400).json({ success: false, message: 'Invalid plan. Use "pro" or "business"' });
       return;
     }
 
@@ -58,59 +88,50 @@ router.post('/create-order', async (req: Request, res: Response): Promise<void> 
     res.status(200).json({
       success: true,
       message: 'Order created successfully',
-      data: order
+      data: order,
     });
 
   } catch (error: any) {
     console.error('Create order error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to create order'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
   }
 });
 
 
-/**
- * POST /api/v1/subscription/verify-payment
- * Verify payment and activate subscription
- */
+// ─────────────────────────────────────────────────────────────────
+// POST /api/v1/subscription/verify-payment
+// Verifies Razorpay payment + activates paid plan
+// Body: { userId, orderId, paymentId, signature, plan }
+// ─────────────────────────────────────────────────────────────────
 router.post('/verify-payment', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId, orderId, paymentId, signature, plan } = req.body;
 
     if (!userId || !orderId || !paymentId || !signature || !plan) {
-      res.status(400).json({ success: false, message: 'All payment details are required' });
+      res.status(400).json({ success: false, message: 'All payment fields are required' });
       return;
     }
 
     await subscriptionService.verifyAndActivateSubscription(
-      userId,
-      orderId,
-      paymentId,
-      signature,
-      plan
+      userId, orderId, paymentId, signature, plan
     );
 
     res.status(200).json({
       success: true,
-      message: 'Subscription activated successfully'
+      message: 'Subscription activated successfully!',
     });
 
   } catch (error: any) {
     console.error('Verify payment error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Payment verification failed'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Payment verification failed' });
   }
 });
 
 
-/**
- * POST /api/v1/subscription/webhook
- * Razorpay webhook endpoint
- */
+// ─────────────────────────────────────────────────────────────────
+// POST /api/v1/subscription/webhook
+// Razorpay webhook — UNCHANGED structure, updated event handling
+// ─────────────────────────────────────────────────────────────────
 router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
   try {
     const signature = req.headers['x-razorpay-signature'] as string;
@@ -137,34 +158,49 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         console.log('✅ Payment captured:', payload.payment.entity.id);
         break;
 
-      case 'payment.failed':
-        console.log('❌ Payment failed:', payload.payment.entity.id);
+      case 'payment.failed': {
+        // Put user in grace period
+        const userId = payload.payment.entity.notes?.userId;
+        if (userId) {
+          const gracePeriodEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+          const { Subscription } = await import('../models');
+          const { User } = await import('../models');
+          const { SubscriptionStatus } = await import('../types');
+
+          await Subscription.findOneAndUpdate(
+            { userId },
+            { status: SubscriptionStatus.GRACE, gracePeriodEndsAt }
+          );
+          await User.findByIdAndUpdate(userId, {
+            subscriptionStatus: SubscriptionStatus.GRACE,
+          });
+          console.log(`⚠️ Payment failed — grace period set for user: ${userId}`);
+        }
         break;
+      }
 
       case 'subscription.cancelled':
-        console.log('🔴 Subscription cancelled');
+        console.log('🔴 Razorpay subscription cancelled');
         break;
 
       default:
-        console.log('ℹ️ Unhandled event:', event);
+        console.log('ℹ️ Unhandled webhook event:', event);
     }
 
     res.status(200).json({ success: true });
 
   } catch (error: any) {
     console.error('Webhook error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Webhook processing failed'
-    });
+    res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
 });
 
 
-/**
- * DELETE /api/v1/subscription/cancel
- * Cancel subscription
- */
+// ─────────────────────────────────────────────────────────────────
+// DELETE /api/v1/subscription/cancel
+// Cancels subscription — stays active till period end
+// Body: { userId }
+// ─────────────────────────────────────────────────────────────────
 router.delete('/cancel', async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.body;
@@ -178,14 +214,11 @@ router.delete('/cancel', async (req: Request, res: Response): Promise<void> => {
 
     res.status(200).json({
       success: true,
-      message: 'Subscription cancelled successfully'
+      message: 'Subscription cancelled. You can continue using Presenz until your billing period ends.',
     });
 
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to cancel subscription'
-    });
+    res.status(500).json({ success: false, message: error.message || 'Failed to cancel subscription' });
   }
 });
 

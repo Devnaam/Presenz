@@ -9,6 +9,7 @@ export interface IWhatsAppSession extends Document {
   qrCode: string | null;
   connectedAt: Date | null;
   lastSeenAt: Date | null;
+  connectedPhone: string | null; 
   authState: any;
   lidMap: Record<string, string>;
   createdAt: Date;
@@ -44,7 +45,8 @@ const WhatsAppSessionSchema = new Schema<IWhatsAppSession>(
     },
     lastSeenAt: {
       type: Date,
-      default: null
+      default: null,
+      index:   true, 
     },
     authState: {
       type: Schema.Types.Mixed,

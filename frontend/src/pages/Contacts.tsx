@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 
 
 const Contacts: React.FC = () => {
-  const { user } = useAuth();
+  const { user, canAddContact, planLimits, isPending, isExpired } = useAuth();
   const [contacts, setContacts] = useState<FamilyContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -39,14 +39,15 @@ const Contacts: React.FC = () => {
   const [loadingKB, setLoadingKB] = useState(false);
   const [savingKB, setSavingKB] = useState(false);
   const [enhancingKB, setEnhancingKB] = useState(false);
+  // ADD AFTER THE LAST useState LINE:
+  const atLimit = !canAddContact(contacts.length);
+  const cannotAdd = isPending || isExpired || atLimit;
 
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
+useEffect(() => {
+  loadContacts();
+}, []);
 
-
-  // UNCHANGED
   const loadContacts = async () => {
     try {
       const response = await contactService.getAll(user!._id);
@@ -320,19 +321,36 @@ const Contacts: React.FC = () => {
   return (
     <div className="space-y-6">
 
-      {/* Header — UNCHANGED */}
+    
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Family Contacts</h1>
           <p className="text-gray-600 mt-1">Manage who AI can reply to</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn btn-primary flex items-center"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Add Contact
-        </button>
+        <div className="flex items-center gap-3">
+          {atLimit && !isPending && !isExpired && (
+            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full font-medium">
+              {contacts.length}/{planLimits.contacts} used · Upgrade to add more
+            </span>
+          )}
+          <button
+            onClick={() => {
+              if (cannotAdd) {
+                toast.error(
+                  isPending || isExpired
+                    ? 'Activate your trial to add contacts'
+                    : `Your ${user?.plan} plan allows ${planLimits.contacts} contact${planLimits.contacts === 1 ? '' : 's'}. Upgrade to add more.`
+                );
+                return;
+              }
+              setShowAddModal(true);
+            }}
+            className={`btn btn-primary flex items-center ${cannotAdd ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <Plus className="w-5 h-5 mr-2" /> Add Contact
+          </button>
+        </div>
       </div>
 
 
@@ -447,8 +465,8 @@ const Contacts: React.FC = () => {
                 type="button"
                 onClick={() => handleEditTabSwitch('info')}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${editTab === 'info'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 Contact Info
@@ -457,8 +475,8 @@ const Contacts: React.FC = () => {
                 type="button"
                 onClick={() => handleEditTabSwitch('kb')}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${editTab === 'kb'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-primary-600 border-b-2 border-primary-600'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 Knowledge Base

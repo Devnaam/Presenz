@@ -16,13 +16,13 @@ const Conversations: React.FC = () => {
   const [sending, setSending] = useState(false);
 
 
-  // Initial load
+// eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadConversations();
   }, []);
 
 
-  // Load messages when contact selected
+// eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedContact) {
       loadMessages(selectedContact._id);
@@ -31,6 +31,7 @@ const Conversations: React.FC = () => {
 
 
   // NEW: Poll messages every 8 seconds while a contact is open
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedContact) return;
     const interval = setInterval(() => {
