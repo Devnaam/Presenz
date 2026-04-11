@@ -25,11 +25,12 @@ class WhatsAppService {
         {
           userId,
           sessionId,
-          status:       SessionStatus.PENDING_QR,
-          qrCode:       null,
-          connectedAt:  null,
-          lastSeenAt:   null,
+          status: SessionStatus.PENDING_QR,
+          qrCode: null,
+          connectedAt: null,
+          lastSeenAt: null,
           connectedPhone: null,
+          authState: null,   // ← THIS IS THE FIX — wipes old credentials
         },
         { upsert: true, new: true }
       );
@@ -56,7 +57,7 @@ class WhatsAppService {
       if (!session) throw new Error('No active WhatsApp session found');
 
       const sock = activeSockets.get(session.sessionId);
-      if (!sock)  throw new Error('Socket not found — please reconnect');
+      if (!sock) throw new Error('Socket not found — please reconnect');
 
       const jid = formatPhoneNumber(phoneNumber);
       console.log(`📤 [SEND] Sending message to JID: ${jid}`);
@@ -74,9 +75,9 @@ class WhatsAppService {
 
   // ── Mark a WhatsApp message as read ──────────────────────────
   async markAsRead(
-    userId:             string,
-    phoneNumber:        string,
-    whatsappMessageId:  string | undefined
+    userId: string,
+    phoneNumber: string,
+    whatsappMessageId: string | undefined
   ): Promise<void> {
     try {
       if (!whatsappMessageId) return;
@@ -88,13 +89,13 @@ class WhatsAppService {
       if (!session) return;
 
       const sock = activeSockets.get(session.sessionId);
-      if (!sock)  return;
+      if (!sock) return;
 
       const jid = formatPhoneNumber(phoneNumber);
       await sock.readMessages([{
         remoteJid: jid,
-        id:        whatsappMessageId,
-        fromMe:    false,
+        id: whatsappMessageId,
+        fromMe: false,
       }]);
 
     } catch (error) {
@@ -114,7 +115,7 @@ class WhatsAppService {
       if (!session) return;
 
       const sock = activeSockets.get(session.sessionId);
-      if (!sock)  return;
+      if (!sock) return;
 
       const jid = formatPhoneNumber(phoneNumber);
       await sock.sendPresenceUpdate('composing', jid);
@@ -135,7 +136,7 @@ class WhatsAppService {
       if (!session) return;
 
       const sock = activeSockets.get(session.sessionId);
-      if (!sock)  return;
+      if (!sock) return;
 
       const jid = formatPhoneNumber(phoneNumber);
       await sock.sendPresenceUpdate('paused', jid);
@@ -148,8 +149,8 @@ class WhatsAppService {
 
   // ── Get current session status ────────────────────────────────
   async getSessionStatus(userId: string): Promise<{
-    status:       SessionStatus;
-    qrCode?:      string;
+    status: SessionStatus;
+    qrCode?: string;
     connectedAt?: Date;
   }> {
     const session = await WhatsAppSession.findOne({ userId });
@@ -159,8 +160,8 @@ class WhatsAppService {
     }
 
     return {
-      status:      session.status,
-      qrCode:      session.qrCode      || undefined,
+      status: session.status,
+      qrCode: session.qrCode || undefined,
       connectedAt: session.connectedAt || undefined,
     };
   }
@@ -182,8 +183,8 @@ class WhatsAppService {
     await WhatsAppSession.findOneAndUpdate(
       { userId },
       {
-        status:         SessionStatus.DISCONNECTED,
-        qrCode:         null,
+        status: SessionStatus.DISCONNECTED,
+        qrCode: null,
         connectedPhone: null,
       }
     );

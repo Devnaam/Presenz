@@ -29,6 +29,7 @@ import { useMongoDBAuthState } from '../utils/mongoAuthState';
 import { replyQueue, voiceQueue } from '../config/queue';
 import QRCode from 'qrcode';
 import qrcodeTerminal from 'qrcode-terminal';
+import activityService from './activity.service';
 
 
 // ─────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ const lidMaps = new Map<string, Map<string, string>>();
 // Buffer for @lid messages that arrived before LID map was loaded
 const pendingLidMessages = new Map<string, Array<{
   message: proto.IWebMessageInfo;
-  userId:  string;
+  userId: string;
   sessionId: string;
 }>>();
 
@@ -66,8 +67,8 @@ class SocketManager {
   // ── Load LID map from MongoDB into memory ─────────────────────
   async loadLidMapFromDB(sessionId: string): Promise<void> {
     try {
-      const session    = await WhatsAppSession.findOne({ sessionId });
-      const storedMap  = (session as any)?.lidMap;
+      const session = await WhatsAppSession.findOne({ sessionId });
+      const storedMap = (session as any)?.lidMap;
 
       if (storedMap && typeof storedMap === 'object') {
         const entries = Object.entries(storedMap) as [string, string][];
@@ -136,19 +137,19 @@ class SocketManager {
       // can be resolved immediately on the next contacts event
       await this.loadLidMapFromDB(sessionId);
 
-      const { version }           = await fetchLatestBaileysVersion();
-      const { state, saveCreds }  = await useMongoDBAuthState(sessionId);
+      const { version } = await fetchLatestBaileysVersion();
+      const { state, saveCreds } = await useMongoDBAuthState(sessionId);
 
       const sock = makeWASocket({
         version,
         logger,
         auth: {
           creds: state.creds,
-          keys:  makeCacheableSignalKeyStore(state.keys, logger),
+          keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
         generateHighQualityLinkPreview: true,
-        keepAliveIntervalMs:  30000,
-        connectTimeoutMs:     60000,
+        keepAliveIntervalMs: 30000,
+        connectTimeoutMs: 60000,
         getMessage: async (_key) => ({ conversation: '' }),
       });
 
@@ -184,7 +185,7 @@ class SocketManager {
             // LAYER 2 + 3: WhatsApp number ownership validation
             // Runs BEFORE marking session as CONNECTED
             // ══════════════════════════════════════════════════
-            const rawId          = sock.user?.id ?? null;
+            const rawId = sock.user?.id ?? null;
             const connectedPhone = rawId
               ? rawId.split(':')[0].split('@')[0]
               : null;
@@ -208,12 +209,19 @@ class SocketManager {
                     `🚫 [AUTH] Phone mismatch — registered: ${registeredNormalized}, ` +
                     `connected: ${connectedNormalized}. Rejecting session.`
                   );
-                  try { await sock.logout(); } catch {}
+                  try { await sock.logout(); } catch { }
                   activeSockets.delete(sessionId);
                   await WhatsAppSession.findOneAndUpdate(
                     { sessionId },
                     { status: SessionStatus.DISCONNECTED, qrCode: null }
                   );
+                  await activityService.log({
+                    userId,
+                    type: 'whatsapp.rejected',
+                    title: 'Connection Rejected',
+                    description: `Phone mismatch — connected number did not match your registered phone`,
+                    metadata: { connectedPhone: connectedNormalized, sessionId },
+                  });
                   return; // ← do NOT mark CONNECTED
                 }
                 console.log(`✅ [AUTH] Layer 2 passed — phone match confirmed`);
@@ -222,16 +230,18 @@ class SocketManager {
               // ── Layer 3: Same WA number must not be active on another account ──
               const alreadyClaimed = await WhatsAppSession.findOne({
                 connectedPhone: connectedNormalized,
-                userId:         { $ne: userId },
-                status:         SessionStatus.CONNECTED,
+                userId: { $ne: userId },
+                status: SessionStatus.CONNECTED,
               });
+
+
 
               if (alreadyClaimed) {
                 console.error(
                   `🚫 [AUTH] WA number ${connectedNormalized} already active on ` +
                   `another account (userId: ${alreadyClaimed.userId}). Rejecting.`
                 );
-                try { await sock.logout(); } catch {}
+                try { await sock.logout(); } catch { }
                 activeSockets.delete(sessionId);
                 await WhatsAppSession.findOneAndUpdate(
                   { sessionId },
@@ -240,15 +250,22 @@ class SocketManager {
                 return; // ← do NOT mark CONNECTED
               }
               console.log(`✅ [AUTH] Layer 3 passed — WA number not claimed by another account`);
+              await activityService.log({
+                userId,
+                type: 'whatsapp.connected',
+                title: 'WhatsApp Connected',
+                description: `+${connectedNormalized} connected successfully`,
+                metadata: { phone: connectedNormalized, sessionId },
+              });
 
               // ── Both layers passed — mark CONNECTED ──────────
               await WhatsAppSession.findOneAndUpdate(
                 { sessionId },
                 {
-                  status:         SessionStatus.CONNECTED,
-                  connectedAt:    new Date(),
-                  lastSeenAt:     new Date(),
-                  qrCode:         null,
+                  status: SessionStatus.CONNECTED,
+                  connectedAt: new Date(),
+                  lastSeenAt: new Date(),
+                  qrCode: null,
                   connectedPhone: connectedNormalized,   // ← persisted for Layer 3 future lookups
                 }
               );
@@ -258,10 +275,10 @@ class SocketManager {
               await WhatsAppSession.findOneAndUpdate(
                 { sessionId },
                 {
-                  status:      SessionStatus.CONNECTED,
+                  status: SessionStatus.CONNECTED,
                   connectedAt: new Date(),
-                  lastSeenAt:  new Date(),
-                  qrCode:      null,
+                  lastSeenAt: new Date(),
+                  qrCode: null,
                 }
               );
             }
@@ -276,8 +293,8 @@ class SocketManager {
             if (closedOnce) return;
             closedOnce = true;
 
-            const statusCode       = (lastDisconnect?.error as Boom)?.output?.statusCode;
-            const isLoggedOut      = statusCode === DisconnectReason.loggedOut;
+            const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
             const isRestartRequired = statusCode === DisconnectReason.restartRequired;
 
             console.log(`❌ [SOCKET] Connection closed — session: ${sessionId}, code: ${statusCode}`);
@@ -291,9 +308,18 @@ class SocketManager {
                 { sessionId },
                 { status: SessionStatus.DISCONNECTED }
               );
+
+              await activityService.log({
+              userId,
+              type: 'whatsapp.disconnected',
+              title: 'WhatsApp Disconnected',
+              description: `WhatsApp session was disconnected`,
+              metadata: { sessionId, reason: 'logged_out' },
+            });
               console.log(`🚪 [SOCKET] Session logged out: ${sessionId}`);
               return;
             }
+            
 
             if (reconnectingSet.has(sessionId)) return;
             reconnectingSet.add(sessionId);
@@ -380,7 +406,7 @@ class SocketManager {
         for (const contact of contacts) {
           // Format A: { lid, id }
           if (contact.lid && contact.id) {
-            const lid   = contact.lid.split(':')[0].split('@')[0];
+            const lid = contact.lid.split(':')[0].split('@')[0];
             const phone = contact.id.split(':')[0].split('@')[0];
             if (lid && phone && !lidMap.has(lid)) {
               lidMap.set(lid, phone);
@@ -389,7 +415,7 @@ class SocketManager {
           }
           // Format B: { lidJid, pnJid } — Baileys v7+
           if (contact.lidJid && contact.pnJid) {
-            const lid   = contact.lidJid.split(':')[0].split('@')[0];
+            const lid = contact.lidJid.split(':')[0].split('@')[0];
             const phone = contact.pnJid.split(':')[0].split('@')[0];
             if (lid && phone && !lidMap.has(lid)) {
               lidMap.set(lid, phone);
@@ -426,8 +452,8 @@ class SocketManager {
           let newMappings = 0;
 
           for (const mapping of lidPnMappings) {
-            const lid   = (mapping.lid || '').split(':')[0].split('@')[0];
-            const phone = (mapping.pn  || '').split(':')[0].split('@')[0];
+            const lid = (mapping.lid || '').split(':')[0].split('@')[0];
+            const phone = (mapping.pn || '').split(':')[0].split('@')[0];
             if (lid && phone && !lidMap.has(lid)) {
               lidMap.set(lid, phone);
               newMappings++;
@@ -448,7 +474,7 @@ class SocketManager {
         if (mapping?.lid && mapping?.pn) {
           if (!lidMaps.has(sessionId)) lidMaps.set(sessionId, new Map());
           const lidMap = lidMaps.get(sessionId)!;
-          const lid   = mapping.lid.split(':')[0].split('@')[0];
+          const lid = mapping.lid.split(':')[0].split('@')[0];
           const phone = mapping.pn.split(':')[0].split('@')[0];
           if (lid && phone) {
             lidMap.set(lid, phone);
@@ -469,7 +495,7 @@ class SocketManager {
   // ── Handle incoming WhatsApp message ─────────────────────────
   async handleIncomingMessage(
     message: proto.IWebMessageInfo,
-    userId:    string,
+    userId: string,
     sessionId: string
   ): Promise<void> {
     try {
@@ -583,13 +609,13 @@ class SocketManager {
 
         const savedMessage = await Message.create({
           userId,
-          contactId:          familyContact._id,
-          direction:          MessageDirection.INCOMING,
-          type:               MessageType.TEXT,
-          originalContent:    messageText,
-          status:             MessageStatus.RECEIVED,
-          whatsappMessageId:  message.key.id ?? undefined,
-          timestamp:          new Date((message.messageTimestamp as number) * 1000),
+          contactId: familyContact._id,
+          direction: MessageDirection.INCOMING,
+          type: MessageType.TEXT,
+          originalContent: messageText,
+          status: MessageStatus.RECEIVED,
+          whatsappMessageId: message.key.id ?? undefined,
+          timestamp: new Date((message.messageTimestamp as number) * 1000),
         }) as any;
 
         console.log(`💾 [DB] Text message saved: ${savedMessage._id}`);
@@ -609,13 +635,13 @@ class SocketManager {
 
         const savedMessage = await Message.create({
           userId,
-          contactId:          familyContact._id,
-          direction:          MessageDirection.INCOMING,
-          type:               MessageType.VOICE_NOTE,
-          originalContent:    'Voice note (processing...)',
-          status:             MessageStatus.RECEIVED,
-          whatsappMessageId:  message.key.id ?? undefined,
-          timestamp:          new Date((message.messageTimestamp as number) * 1000),
+          contactId: familyContact._id,
+          direction: MessageDirection.INCOMING,
+          type: MessageType.VOICE_NOTE,
+          originalContent: 'Voice note (processing...)',
+          status: MessageStatus.RECEIVED,
+          whatsappMessageId: message.key.id ?? undefined,
+          timestamp: new Date((message.messageTimestamp as number) * 1000),
         }) as any;
 
         console.log(`💾 [DB] Voice note saved: ${savedMessage._id}`);
@@ -646,8 +672,8 @@ class SocketManager {
 
           await voiceQueue.add('transcribe-voice', {
             userId,
-            contactId:  familyContact._id.toString(),
-            messageId:  savedMessage._id.toString(),
+            contactId: familyContact._id.toString(),
+            messageId: savedMessage._id.toString(),
             audioBuffer: buffer.toString('base64'),
           });
 
@@ -656,7 +682,7 @@ class SocketManager {
         } catch (error) {
           console.error('❌ [VOICE] Error downloading voice note:', error);
           await Message.findByIdAndUpdate(savedMessage._id, {
-            status:          MessageStatus.FAILED,
+            status: MessageStatus.FAILED,
             originalContent: 'Voice note (download failed)',
           });
         }
@@ -672,9 +698,9 @@ class SocketManager {
 
   // ── Check status + queue AI reply ────────────────────────────
   async checkAndQueueReply(
-    userId:      string,
-    contactId:   any,
-    messageId:   string,
+    userId: string,
+    contactId: any,
+    messageId: string,
     messageText: string,
     messageType: 'text' | 'voice'
   ): Promise<void> {
@@ -709,7 +735,7 @@ class SocketManager {
 
     const job = await replyQueue.add('generate-reply', {
       userId,
-      contactId:   contactId.toString(),
+      contactId: contactId.toString(),
       messageId,
       messageText,
       messageType,

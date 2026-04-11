@@ -247,12 +247,9 @@ export const profileService = {
 
 
 // ─────────────────────────────────────────────────────────────────
-// Activity APIs — UNCHANGED
+// Activity APIs — UPDATED
 // ─────────────────────────────────────────────────────────────────
 export const activityService = {
-  getLog: (userId: string, page = 1, filter = 'all') =>
-    api.get(`/activity?userId=${userId}&page=${page}&filter=${filter}`),
-
-  getStats: (userId: string) =>
-    api.get(`/activity/stats?userId=${userId}`),
+  getActivity: (userId: string, page = 1) =>
+    api.get(`/activity?userId=${userId}&page=${page}&limit=20`),
 };

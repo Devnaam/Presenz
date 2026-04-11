@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { sessionService } from '../services/apiService';
-import { QrCode, X, CheckCircle2 } from 'lucide-react';
+import { QrCode, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-
 
 interface WhatsAppQRModalProps {
   userId: string;
   isOpen: boolean;
   onClose: () => void;
-  onConnected: () => void; // called when scan succeeds
+  onConnected: () => void;
 }
 
+type ModalState = 'idle' | 'loading' | 'pending_qr' | 'connected' | 'failed';
 
 const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
   userId,
@@ -18,62 +18,89 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
   onClose,
   onConnected,
 }) => {
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<'idle' | 'pending_qr' | 'connected'>('idle');
-  const [loading, setLoading] = useState(false);
-
+  const [qrCode, setQrCode]           = useState<string | null>(null);
+  const [modalState, setModalState]   = useState<ModalState>('idle');
+  const [failReason, setFailReason]   = useState<string>('');
+  const intervalRef                   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!isOpen) return null;
 
-
-  const handleCreateSession = async () => {
-    setLoading(true);
-    try {
-      await sessionService.createSession(userId);
-      toast.success('Session created! Scan QR code with WhatsApp');
-      startPollingQR();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create session');
-    } finally {
-      setLoading(false);
-    }
+  const stopPolling = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (timeoutRef.current)  { clearTimeout(timeoutRef.current);   timeoutRef.current = null;  }
   };
 
-
   const startPollingQR = () => {
-    const interval = setInterval(async () => {
+    stopPolling();
+
+    intervalRef.current = setInterval(async () => {
       try {
         const response = await sessionService.getQR(userId);
-        if (response.data.status === 'connected') {
-          setSessionStatus('connected');
-          clearInterval(interval);
-          toast.success('WhatsApp connected successfully!');
-          // wait 1.5s so user sees the success screen, then close
+        const { status, qrCode: newQR } = response.data;
+
+        if (status === 'connected') {
+          stopPolling();
+          setModalState('connected');
           setTimeout(() => {
             onConnected();
             handleClose();
           }, 1500);
-        } else if (response.data.qrCode) {
-          setQrCode(response.data.qrCode);
-          setSessionStatus('pending_qr');
+
+        } else if (newQR) {
+          setQrCode(newQR);
+          setModalState('pending_qr');
+
+        } else if (status === 'disconnected') {
+          // ── Session died (401 / logged out) ──────────────────
+          // Socket sets status DISCONNECTED when WA rejects creds.
+          // Stop polling and show retry.
+          stopPolling();
+          setQrCode(null);
+          setFailReason('QR expired or connection was rejected by WhatsApp. Please try again.');
+          setModalState('failed');
         }
+
       } catch {
-        clearInterval(interval);
+        stopPolling();
+        setFailReason('Lost connection to server. Please try again.');
+        setModalState('failed');
       }
     }, 3000);
 
-    // Stop polling after 5 minutes
-    setTimeout(() => clearInterval(interval), 5 * 60 * 1000);
+    // Hard 5-minute timeout
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      if (modalState !== 'connected') {
+        setQrCode(null);
+        setFailReason('QR code expired after 5 minutes. Please try again.');
+        setModalState('failed');
+      }
+    }, 5 * 60 * 1000);
   };
 
+  const handleCreateSession = async () => {
+    setModalState('loading');
+    setQrCode(null);
+    setFailReason('');
+    try {
+      await sessionService.createSession(userId);
+      startPollingQR();
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Failed to create session';
+      toast.error(msg);
+      setFailReason(msg);
+      setModalState('failed');
+    }
+  };
 
   const handleClose = () => {
+    stopPolling();
     setQrCode(null);
-    setSessionStatus('idle');
-    setLoading(false);
+    setModalState('idle');
+    setFailReason('');
     onClose();
   };
-
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -92,8 +119,8 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
 
         <div className="text-center">
 
-          {/* Success state */}
-          {sessionStatus === 'connected' && (
+          {/* ── Connected ────────────────────────────────── */}
+          {modalState === 'connected' && (
             <div className="py-6">
               <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-3" />
               <p className="text-lg font-semibold text-gray-900">Connected!</p>
@@ -101,8 +128,8 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
             </div>
           )}
 
-          {/* QR code state */}
-          {sessionStatus === 'pending_qr' && qrCode && (
+          {/* ── QR Showing ───────────────────────────────── */}
+          {modalState === 'pending_qr' && qrCode && (
             <>
               <img
                 src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
@@ -116,8 +143,40 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
             </>
           )}
 
-          {/* Idle state — initial */}
-          {sessionStatus === 'idle' && (
+          {/* ── Generating (loading) ─────────────────────── */}
+          {modalState === 'loading' && (
+            <div className="py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4" />
+              <p className="text-gray-600 text-sm">Generating QR code...</p>
+            </div>
+          )}
+
+          {/* ── Waiting for QR (created but no QR yet) ───── */}
+          {modalState === 'pending_qr' && !qrCode && (
+            <div className="py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4" />
+              <p className="text-gray-600 text-sm">Waiting for QR code...</p>
+            </div>
+          )}
+
+          {/* ── Failed / Expired — Retry ─────────────────── */}
+          {modalState === 'failed' && (
+            <div className="py-6">
+              <AlertCircle className="w-14 h-14 text-red-400 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-800 mb-1">Connection Failed</p>
+              <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">{failReason}</p>
+              <button
+                onClick={handleCreateSession}
+                className="btn btn-primary flex items-center gap-2 mx-auto"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* ── Idle — initial prompt ─────────────────────── */}
+          {modalState === 'idle' && (
             <>
               <QrCode className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600 mb-6 text-sm">
@@ -125,10 +184,9 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
               </p>
               <button
                 onClick={handleCreateSession}
-                disabled={loading}
                 className="btn btn-primary"
               >
-                {loading ? 'Generating...' : 'Generate QR Code'}
+                Generate QR Code
               </button>
             </>
           )}
@@ -138,6 +196,5 @@ const WhatsAppQRModal: React.FC<WhatsAppQRModalProps> = ({
     </div>
   );
 };
-
 
 export default WhatsAppQRModal;

@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { registerValidation, loginValidation } from '../middleware/validation.middleware';
 import { StudentMode, SubscriptionStatus } from '../types';
 import bcrypt from 'bcryptjs';
+import activityService from '../services/activity.service';
 
 
 const router = Router();
@@ -63,6 +64,14 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       autoAwayEnabled: true,
       autoAwayMinutes: 30,
       lastActiveAt: new Date(),
+    });
+
+    await activityService.log({
+      userId: user._id.toString(),
+      type: 'account.registered',
+      title: 'Account Created',
+      description: `Welcome to Presenz, ${user.name}!`,
+      metadata: { email: user.email },
     });
 
     // ── Generate token ────────────────────────────────────────────

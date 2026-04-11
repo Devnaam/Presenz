@@ -7,3 +7,4 @@ export { Message } from './Message';
 export { Subscription } from './Subscription';
 export { UserProfile } from './UserProfile';
 export { ConversationMeta } from './ConversationMeta'; // ✅ NEW
+export { ActivityLog } from './ActivityLog'; // ✅ NEW

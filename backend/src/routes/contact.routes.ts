@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { FamilyContact, PersonalityProfile, Message, User } from '../models';  // ← added User
 import { SubscriptionStatus } from '../types';                                  // ← added
+import activityService from '../services/activity.service';
 
 const router = Router();
 
@@ -118,6 +119,15 @@ router.post('/', async (req: Request, res: Response) => {
       isActive: true,
     });
 
+
+    await activityService.log({
+      userId: userId as string,
+      type: 'contact.added',
+      title: `Contact Added — ${name}`,
+      description: `${name} (${relation}) added to your contacts`,
+      metadata: { contactId: contact._id.toString(), name, relation },
+    });
+
     res.status(201).json({
       success: true,
       message: 'Family contact added successfully',
@@ -227,6 +237,14 @@ router.delete('/:id', async (req: Request, res: Response) => {
       PersonalityProfile.deleteMany({ contactId: id }),
       Message.deleteMany({ contactId: id }),
     ]);
+
+    await activityService.log({
+  userId:      contact.userId.toString(),
+  type:        'contact.removed',
+  title:       `Contact Removed — ${contact.name}`,
+  description: `${contact.name} (${contact.relation}) removed from your contacts`,
+  metadata:    { contactId: id, name: contact.name },
+});
 
     res.status(200).json({
       success: true,

@@ -2,22 +2,18 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import personalityService from '../services/personality.service';
 import groqService from '../services/groq.service';
-
+import activityService from '../services/activity.service';
 
 const router = Router();
 
-
-// Configure multer for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
-
 
 /**
  * POST /api/v1/personality/upload
- * UNCHANGED
  */
 router.post('/upload', upload.single('chatFile'), async (req: Request, res: Response) => {
   try {
@@ -48,6 +44,18 @@ router.post('/upload', upload.single('chatFile'), async (req: Request, res: Resp
       studentName
     );
 
+    // ── Log profile creation ──────────────────────────────────────
+    // contactName comes from the result returned by processChatExport
+    // falling back to studentName if not present
+    const contactName = (result as any)?.contactName || studentName;
+    await activityService.log({
+      userId,
+      type:        'contact.profile_created',
+      title:       `AI Profile Created — ${contactName}`,
+      description: `Personality profile is ready for ${contactName}`,
+      metadata:    { contactId, contactName },
+    });
+
     res.status(200).json({
       success: true,
       message: 'Personality profile created successfully',
@@ -63,10 +71,8 @@ router.post('/upload', upload.single('chatFile'), async (req: Request, res: Resp
   }
 });
 
-
 /**
  * GET /api/v1/personality/status
- * UNCHANGED
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
@@ -98,10 +104,8 @@ router.get('/status', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * POST /api/v1/personality/test
- * UNCHANGED
  */
 router.post('/test', async (req: Request, res: Response) => {
   try {
@@ -134,10 +138,8 @@ router.post('/test', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * DELETE /api/v1/personality/reset
- * UNCHANGED
  */
 router.delete('/reset', async (req: Request, res: Response) => {
   try {
@@ -166,10 +168,8 @@ router.delete('/reset', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * PATCH /api/v1/personality/knowledge-base
- * UNCHANGED
  */
 router.patch('/knowledge-base', async (req: Request, res: Response) => {
   try {
@@ -207,10 +207,8 @@ router.patch('/knowledge-base', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * GET /api/v1/personality/knowledge-base
- * UNCHANGED
  */
 router.get('/knowledge-base', async (req: Request, res: Response) => {
   try {
@@ -243,11 +241,8 @@ router.get('/knowledge-base', async (req: Request, res: Response) => {
   }
 });
 
-
 /**
  * POST /api/v1/personality/enhance-context
- * Takes rough user notes → returns AI-expanded paragraph
- * NEW
  */
 router.post('/enhance-context', async (req: Request, res: Response) => {
   try {
@@ -288,6 +283,5 @@ router.post('/enhance-context', async (req: Request, res: Response) => {
     });
   }
 });
-
 
 export default router;

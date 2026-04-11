@@ -2,30 +2,48 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { activityService } from '../services/apiService';
 import {
-  Zap, MessageCircle, RefreshCw, ChevronLeft,
-  ChevronRight, UserCheck
+  UserPlus, Gift, Zap, Star, XCircle, AlertCircle,
+  Smartphone, WifiOff, ShieldX, UserMinus, Brain,
+  CheckCircle, ChevronLeft, ChevronRight, RefreshCw, Activity
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// ── Event type → icon / color / category ─────────────────────────
+const EVENT_CONFIG: Record<string, {
+  icon: React.ElementType;
+  bg: string;
+  iconColor: string;
+  category: string;
+}> = {
+  'account.registered':           { icon: UserPlus,    bg: 'bg-green-100',  iconColor: 'text-green-600',  category: 'Account' },
+  'account.onboarded':            { icon: CheckCircle, bg: 'bg-green-100',  iconColor: 'text-green-600',  category: 'Account' },
+  'subscription.trial_activated': { icon: Gift,        bg: 'bg-blue-100',   iconColor: 'text-blue-600',   category: 'Subscription' },
+  'subscription.upgraded':        { icon: Zap,         bg: 'bg-purple-100', iconColor: 'text-purple-600', category: 'Subscription' },
+  'subscription.cancelled':       { icon: XCircle,     bg: 'bg-amber-100',  iconColor: 'text-amber-600',  category: 'Subscription' },
+  'subscription.expired':         { icon: AlertCircle, bg: 'bg-red-100',    iconColor: 'text-red-600',    category: 'Subscription' },
+  'subscription.referral_earned': { icon: Gift,        bg: 'bg-green-100',  iconColor: 'text-green-600',  category: 'Subscription' },
+  'whatsapp.connected':           { icon: Smartphone,  bg: 'bg-green-100',  iconColor: 'text-green-600',  category: 'WhatsApp' },
+  'whatsapp.disconnected':        { icon: WifiOff,     bg: 'bg-gray-100',   iconColor: 'text-gray-500',   category: 'WhatsApp' },
+  'whatsapp.rejected':            { icon: ShieldX,     bg: 'bg-red-100',    iconColor: 'text-red-600',    category: 'WhatsApp' },
+  'contact.added':                { icon: UserPlus,    bg: 'bg-blue-100',   iconColor: 'text-blue-600',   category: 'Contacts' },
+  'contact.removed':              { icon: UserMinus,   bg: 'bg-red-100',    iconColor: 'text-red-500',    category: 'Contacts' },
+  'contact.profile_created':      { icon: Brain,       bg: 'bg-purple-100', iconColor: 'text-purple-600', category: 'Contacts' },
+};
 
-type Filter = 'all' | 'ai' | 'override';
+const CATEGORY_COLORS: Record<string, string> = {
+  Account:      'bg-green-50 text-green-700 border border-green-200',
+  Subscription: 'bg-purple-50 text-purple-700 border border-purple-200',
+  WhatsApp:     'bg-blue-50 text-blue-700 border border-blue-200',
+  Contacts:     'bg-gray-100 text-gray-600 border border-gray-200',
+};
 
-interface ActivityMessage {
+interface ActivityEvent {
   _id: string;
-  contactId: { name: string; relation: string; phone: string } | null;
-  finalText: string;
-  originalContent: string;
-  generatedByAI: boolean;
-  studentOverride: boolean;
-  language: string;
-  timestamp: string;
   type: string;
-}
-
-interface Stats {
-  totalAI: number;
-  todayAI: number;
-  overridden: number;
+  title: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
 }
 
 interface Pagination {
@@ -35,92 +53,80 @@ interface Pagination {
   hasMore: boolean;
 }
 
+// ── Relative time ────────────────────────────────────────────────
+const formatTime = (ts: string): string => {
+  const d       = new Date(ts);
+  const now     = new Date();
+  const diffMs  = now.getTime() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH   = Math.floor(diffMs / 3600000);
+  const diffD   = Math.floor(diffMs / 86400000);
 
-const Activity: React.FC = () => {
+  if (diffMin < 1)  return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffH < 24)   return `${diffH}h ago`;
+  if (diffD === 1)  return 'Yesterday';
+  if (diffD < 7)    return `${diffD}d ago`;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// ── Group events by date ─────────────────────────────────────────
+const groupByDate = (events: ActivityEvent[]): Record<string, ActivityEvent[]> => {
+  return events.reduce((acc, event) => {
+    const d   = new Date(event.createdAt);
+    const now = new Date();
+    const diffD = Math.floor((now.getTime() - d.getTime()) / 86400000);
+    const key   = diffD === 0 ? 'Today'
+                : diffD === 1 ? 'Yesterday'
+                : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(event);
+    return acc;
+  }, {} as Record<string, ActivityEvent[]>);
+};
+
+
+
+const ActivityPage: React.FC = () => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<ActivityMessage[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [events, setEvents]         = useState<ActivityEvent[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<Filter>('all');
-  const [page, setPage] = useState(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    loadStats();
-  }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    loadLog(page, filter);
-  }, [page, filter]);
+  const [page, setPage]             = useState(1);
 
-  const loadStats = async () => {
-    try {
-      const res = await activityService.getStats(user!._id);
-      setStats(res.data.data);
-    } catch {
-      // stats are non-critical — fail silently
-    }
-  };
+  useEffect(() => { loadActivity(page); }, [page]);
 
-
-  const loadLog = async (p: number, f: Filter, isRefresh = false) => {
+  const loadActivity = async (p: number, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-
     try {
-      const res = await activityService.getLog(user!._id, p, f);
-      setMessages(res.data.data.messages);
+      const res = await activityService.getActivity(user!._id, p);
+      setEvents(res.data.data.events);
       setPagination(res.data.data.pagination);
-    } catch (error: any) {
-      toast.error('Failed to load activity log');
+    } catch {
+      toast.error('Failed to load activity');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-
-  const handleFilterChange = (f: Filter) => {
-    setFilter(f);
-    setPage(1); // reset to first page on filter change
-  };
-
-
   const handleRefresh = async () => {
-    await Promise.all([
-      loadStats(),
-      loadLog(page, filter, true),
-    ]);
+    await loadActivity(page, true);
     toast.success('Refreshed');
   };
 
-
-  const formatTime = (ts: string) => {
-    const d = new Date(ts);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString();
-  };
-
+  const grouped = groupByDate(events);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl mx-auto">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Activity Log</h1>
-          <p className="text-gray-600 mt-1">Every reply your AI has sent</p>
+          <h1 className="text-2xl font-bold text-gray-900">Account Activity</h1>
+          <p className="text-gray-500 text-sm mt-1">Everything that's happened on your account</p>
         </div>
         <button
           onClick={handleRefresh}
@@ -132,133 +138,75 @@ const Activity: React.FC = () => {
         </button>
       </div>
 
-
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total AI Replies</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalAI}</p>
-              </div>
-              <div className="p-3 bg-primary-100 rounded-lg">
-                <Zap className="w-6 h-6 text-primary-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Sent Today</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.todayAI}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <MessageCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">You Overrode</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.overridden}</p>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <UserCheck className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Filter Tabs */}
-      <div className="flex bg-gray-100 rounded-lg p-1 gap-1 w-fit">
-        {([
-          { value: 'all', label: '⚡ All AI Replies' },
-          { value: 'override', label: '✏️ You Overrode' },
-        ] as { value: Filter; label: string }[]).map((f) => (
-          <button
-            key={f.value}
-            onClick={() => handleFilterChange(f.value)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filter === f.value
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-              }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-
-      {/* Log */}
+      {/* Timeline */}
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-16">
-            <Zap className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-600 font-medium">No AI replies yet</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Set your status to Away and let AI handle messages
+        ) : events.length === 0 ? (
+          <div className="text-center py-20">
+            <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">No activity yet</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Your account events will appear here
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {messages.map((msg) => (
-              <div key={msg._id} className="p-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-
-                    {/* Icon */}
-                    <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${msg.studentOverride ? 'bg-yellow-100' : 'bg-primary-100'
-                      }`}>
-                      {msg.studentOverride
-                        ? <UserCheck className="w-4 h-4 text-yellow-600" />
-                        : <Zap className="w-4 h-4 text-primary-600" />
-                      }
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {/* Contact + badges row */}
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="font-medium text-gray-900 text-sm">
-                          {msg.contactId?.name || 'Unknown Contact'}
-                        </p>
-                        {msg.contactId?.relation && (
-                          <span className="text-xs text-gray-500">
-                            · {msg.contactId.relation}
-                          </span>
-                        )}
-                        {msg.studentOverride && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                            You overrode
-                          </span>
-                        )}
-                        {msg.language && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
-                            {msg.language}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Message text */}
-                      <p className="text-sm text-gray-800 leading-relaxed">
-                        {msg.finalText || msg.originalContent}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Timestamp */}
-                  <p className="text-xs text-gray-400 flex-shrink-0 mt-1">
-                    {formatTime(msg.timestamp)}
+          <div>
+            {Object.entries(grouped).map(([dateLabel, dayEvents]) => (
+              <div key={dateLabel}>
+                {/* Date separator */}
+                <div className="px-5 py-2.5 bg-gray-50 border-y border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {dateLabel}
                   </p>
+                </div>
+
+                {/* Events for this day */}
+                <div className="divide-y divide-gray-50">
+                  {dayEvents.map((event) => {
+                    const config = EVENT_CONFIG[event.type] ?? {
+                      icon: Activity,
+                      bg: 'bg-gray-100',
+                      iconColor: 'text-gray-500',
+                      category: 'Other',
+                    };
+                    const Icon = config.icon;
+                    const categoryStyle = CATEGORY_COLORS[config.category] ?? 'bg-gray-100 text-gray-500';
+
+                    return (
+                      <div
+                        key={event._id}
+                        className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
+                      >
+                        {/* Icon */}
+                        <div className={`p-2.5 rounded-xl flex-shrink-0 mt-0.5 ${config.bg}`}>
+                          <Icon className={`w-4 h-4 ${config.iconColor}`} />
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {event.title}
+                            </p>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${categoryStyle}`}>
+                              {config.category}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 leading-relaxed">
+                            {event.description}
+                          </p>
+                        </div>
+
+                        {/* Time */}
+                        <p className="text-xs text-gray-400 flex-shrink-0 mt-1">
+                          {formatTime(event.createdAt)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -266,12 +214,11 @@ const Activity: React.FC = () => {
         )}
       </div>
 
-
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {((pagination.page - 1) * 20) + 1}–{Math.min(pagination.page * 20, pagination.total)} of {pagination.total} replies
+          <p className="text-sm text-gray-500">
+            {((pagination.page - 1) * 20) + 1}–{Math.min(pagination.page * 20, pagination.total)} of {pagination.total} events
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -279,10 +226,9 @@ const Activity: React.FC = () => {
               disabled={page === 1}
               className="btn btn-secondary flex items-center gap-1 disabled:opacity-40"
             >
-              <ChevronLeft className="w-4 h-4" />
-              Prev
+              <ChevronLeft className="w-4 h-4" /> Prev
             </button>
-            <span className="text-sm text-gray-700 px-2">
+            <span className="text-sm text-gray-600 px-2">
               {pagination.page} / {pagination.totalPages}
             </span>
             <button
@@ -290,8 +236,7 @@ const Activity: React.FC = () => {
               disabled={!pagination.hasMore}
               className="btn btn-secondary flex items-center gap-1 disabled:opacity-40"
             >
-              Next
-              <ChevronRight className="w-4 h-4" />
+              Next <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -301,5 +246,4 @@ const Activity: React.FC = () => {
   );
 };
 
-
-export default Activity;
+export default ActivityPage;

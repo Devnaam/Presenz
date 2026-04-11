@@ -3,6 +3,7 @@ import { razorpay } from '../config/razorpay';
 import { Subscription, User } from '../models';
 import { SubscriptionPlan, SubscriptionStatus } from '../types';
 import { getSubscriptionEndDate } from '../utils/payment';
+import activityService from './activity.service';
 
 
 // ─────────────────────────────────────────────────────────────────
@@ -136,6 +137,14 @@ class SubscriptionService {
     }
 
     console.log(`✅ Trial activated for user: ${userId} — ends ${trialEndsAt.toISOString()}`);
+
+    await activityService.log({
+      userId,
+      type: 'subscription.trial_activated',
+      title: 'Free Trial Started',
+      description: `Your 7-day free trial has been activated · Ends ${trialEndsAt.toLocaleDateString('en-IN')}`,
+      metadata: { trialEndsAt, bonusDays: user.bonusDays || 0 },
+    });
 
     return {
       trialEndsAt,
@@ -325,6 +334,13 @@ class SubscriptionService {
         );
 
         console.log(`🎁 Referral reward: +${REFERRAL_BONUS_DAYS} days added to user ${referrer._id}`);
+        await activityService.log({
+    userId:      referrer._id.toString(),
+    type:        'subscription.referral_earned',
+    title:       'Referral Bonus Earned',
+    description: `+${REFERRAL_BONUS_DAYS} bonus days added to your trial`,
+    metadata:    { bonusDays: REFERRAL_BONUS_DAYS, newTrialEndsAt },
+  });
       }
 
     } catch (error) {
@@ -364,8 +380,7 @@ class SubscriptionService {
       currency: 'INR',
       plan: planDetails.name,
     };
-    console.log('KEY BEING USED:', process.env.RAZORPAY_KEY_ID);
-    console.log('SECRET LENGTH:', process.env.RAZORPAY_KEY_SECRET?.length);
+
   }
 
 
@@ -423,6 +438,14 @@ class SubscriptionService {
     });
 
     console.log(`✅ Paid subscription activated — user: ${userId}, plan: ${plan}`);
+    await activityService.log({
+      userId,
+      type: 'subscription.upgraded',
+      title: `Upgraded to ${plan === 'pro' ? 'Pro' : 'Business'} Plan`,
+      description: `Paid ₹${plan === 'pro' ? '299' : '999'} · ${plan === 'pro' ? 'Pro' : 'Business'} Plan activated`,
+      metadata: { plan, paymentId, amount: plan === 'pro' ? 29900 : 99900 },
+    });
+
   }
 
 
@@ -450,6 +473,13 @@ class SubscriptionService {
     );
 
     console.log(`🔴 Subscription cancelled for user: ${userId} — active until ${subscription.currentPeriodEnd}`);
+    await activityService.log({
+      userId,
+      type: 'subscription.cancelled',
+      title: 'Subscription Cancelled',
+      description: `Full access continues until ${subscription.currentPeriodEnd?.toLocaleDateString('en-IN')}`,
+      metadata: { currentPeriodEnd: subscription.currentPeriodEnd },
+    });
   }
 
 
